@@ -1,0 +1,4 @@
+Channel	RegZone
+1	2433
+2	2443
+3	2438

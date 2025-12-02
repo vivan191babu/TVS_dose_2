@@ -1,0 +1,515 @@
+PIN 1 0
+TEMPR 300.
+***************************************************************************************************
+**   ОПИСАНИЕ ЦЕЛИ  РАСЧЕТА
+**   Расчет потока фотонов от ТВС 14-10-3МП
+***************************************************************************************************
+**     FUEL LIGHT TVEL
+MATR 1
+U235      0.0030698
+U238      0.0033561
+SI        0.007100
+AL        0.056140
+NI        0.000541
+**     FUEL HEAVY TVEL
+MATR 2
+U235      0.0034507
+U238      0.0029720
+SI        0.007088
+AL        0.056056
+NI        0.000540
+**     GAMMA GD = 3,0 СВП 968.005
+MATR 3
+GD         0.012221959
+**     GAMMA GD = 3,5 в маленьких СВП СВП 968.004-01
+MATR 4
+GD         0.014168319
+**     ZIRCONIUM  SP-110
+MATR 5
+ZR        0.042436
+NB        0.000421
+SI        2.8E-5
+FE        3.5E-5
+F         6.2E-6
+HF        1.1E-5
+**     STEEL
+MATR 6
+FE        0.05808
+CR        0.01234
+NI        0.01278
+MO        0.0016
+**     ZIRCONIUM-BOR  SP-110B
+MATR 7
+B         0.001826179
+ZR        0.042436
+NB        0.000421
+SI        2.8E-5
+FE        3.5E-5
+F         6.2E-6
+HF        1.1E-5
+**     OXID ALUMINIUM  AL2O3
+MATR 8
+AL        0.04372
+O         0.06558
+**     H2O MKP
+MATR 9
+H        0.06690
+O        0.03345
+**     H2O IN TBC
+MATR 10
+N        3.986E-5
+O        1.043E-5
+**     Воздух
+MATR 11
+N        3.986E-5
+O        1.043E-5
+**     ABSORBER AZ   B4C
+MATR 12
+B10        0.01429
+B11        0.05772
+C          0.02528
+MATR 13
+**     ABSORBER PEL-1  ПЕ-8
+EU        0.00365
+NI        0.05595
+CR        0.01804
+FE        0.001326
+MATR 14
+**     ABSORBER PEL-2  БС-5-15
+B10        0.01140
+B11        0.04605
+TI         0.0310
+CR         0.00435
+SI         0.00202
+MO         0.00354
+FE         0.00177
+**  CLAD OF TVEL
+MATR 15
+ZR        0.042436
+NB        0.000421
+SI        2.8E-5
+FE        3.5E-5
+F         6.2E-6
+HF        1.1E-5
+**     DETECTORS GAS
+MATR 16  
+B10   7.0E-5
+**    ALUMINIUM CAISSON
+MATR 17
+AL    0.0603
+END
+NEUT 0
+PHOT 1
+WPHO 1
+FINISH
+***************************************************************************************************
+HEAD   1   0    500
+CONT  B B B 
+EQU    HAZ  =92
+EQU    STEPK      =7.2
+EQU    DIAG       =7.2/COS(30)
+EQU    PD         =DIAG/2
+EQU    PR         =PD/2
+EQU    PS         =STEPK/2
+EQU    SKX        =STEPK*SIN(30)
+EQU    SKY        =STEPK*COS(30)
+EQU    SK2Y       =2*SKY
+EQU    SK3Y       =3*SKY
+EQU    SK4Y       =4*SKY
+EQU    SK5Y       =5*SKY
+EQU    SK6Y       =6*SKY
+EQU    SK7Y       =7*SKY
+EQU    SK8Y       =8*SKY
+EQU    SK9Y       =9*SKY
+EQU    RK0X       =8*STEPK
+EQU    RK1X       =7.5*STEPK
+EQU    RK2X       =7*STEPK
+EQU    RK5X       =6.5*STEPK
+EQU    RK6X       =6*STEPK
+EQU    RK7X       =4.5*STEPK
+EQU    RK8X       =4*STEPK
+EQU    RK9X       =1.5*STEPK
+EQU    RK10X       =5*STEPK
+EQU    RK11X       =2*STEPK
+EQU    RP1X       =7*STEPK
+EQU    P2         =SKY+PD
+EQU    P3         =SKY+P2
+EQU    P4         =SKY+P3
+EQU    P5         =SKY+P4
+EQU    P6         =SKY+P5
+EQU    P7         =SKY+P6
+EQU    P8         =SKY+P7
+EQU    P9         =SKY+P8
+EQU    P10        =SK9Y+PR
+EQU    RP1Y       =STEPK/2
+EQU    STEPT      =0.700
+EQU    STEPT1     =0.705
+EQU    CX         =STEPT*SIN(30)
+EQU    CY         =STEPT*COS(30)
+EQU    CXN        =2*STEPT
+EQU    CYN        =4*CY
+EQU    HPS        =135.0
+EQU    HPPSC      =85.5
+EQU    HPPSP      =90.0
+EQU    HE         =18.0
+EQU    HB         =HE+1.3
+EQU    HSB        =2.0
+EQU    HOS        =HPS-HB-HSB
+EQU    HPB        =HPPSP-HE-HSB
+EQU    HDTC       =4.6
+*      Геометрия внутри ТВС
+EQU    HTW        =92
+EQU    CVRX       =0.053
+EQU    CVRY       =0.09177
+EQU    CVR        =0.106
+EQU    CVRX1      =0.0625
+EQU    CVRY1      =0.10825
+EQU    CVR1       =0.125
+EQU    PLX1       =2.7436
+EQU    PLX2       =0.506095
+EQU    PLY1       =0.9996
+EQU    PLY2       =2.87581
+EQU    ZSUZ       =112.8
+EQU    ZSUZ0      =ZSUZ-0.5
+EQU    ZSUZK      =ZSUZ0-1.5
+*      Разбивка по высоте твэл
+EQU    H1         =0.5
+EQU    H2         =0.5
+EQU    H3         =0.5
+EQU    H4         =1.0
+EQU    H5         =1.0
+EQU    H6         =2.0
+EQU    H7         =2.0
+EQU    H8         =7.0
+EQU    H9         =8.5
+EQU    H10        =7.0
+EQU    H11        =7.0
+EQU    H12        =7.0
+EQU    H13        =7.0
+EQU    H14        =7.0
+EQU    H15        =8.0
+EQU    H16        =7.0
+EQU    H17        =7.0
+EQU    H18        =10.6
+EQU    HZ1        =46 / 5
+EQU    HZ2        =2* 46 / 5
+EQU    HZ3        =3* 46 / 5
+EQU    HZ4        =4* 46 / 5
+EQU    HZ5        =5* 46 / 5
+EQU    HZ6        =6* 46 / 5
+EQU    HZ7        =7* 46 / 5
+EQU    HZ8        =8* 46 / 5
+EQU    HZ9        =9* 46 / 5
+
+*      MAIN CELL
+C=    Тела внешней геометрии экранной сборки
+RCZ    N1     0.,0.,0.,    HTW    45.0
+
+C=     BODY OF EXTERNAL HEX AND CYLINDERES
+C=    TELA TWS
+RCZ    S1     0.,0.,0.,    HTW    3.0
+RCZ    S2     0.,0.,0.,    HTW    2.92
+BOX    S3    PLX1  PLY1  0.0
+      -0.5         0.866025   0.0
+      -0.0866025  -0.05       0.0
+       0.0         0.0       HTW
+**************************************************
+*******           DETECTORS               ********
+**************************************************
+RCZ    D1     0.,0.,0.,    HTW    42.0
+RCZ    D2     0.,0.,0.,    HTW    39.0
+RCZ    D3     0.,0.,0.,    HTW    4.0
+RCZ    D4     0.,0.,0.,    HTW    5.0
+RCZ    D5     0.,0.,0.,    HTW    6.0
+RCZ    D6     0.,0.,0.,    HTW    7.0
+
+SLA    DH1    0 0 0     0 0 HZ1
+SLA    DH2    0 0 HZ1   0 0 HZ1
+SLA    DH3    0 0 HZ2   0 0 HZ1
+SLA    DH4    0 0 HZ3   0 0 HZ1
+SLA    DH5    0 0 HZ4   0 0 HZ1
+SLA    DH6    0 0 HZ5   0 0 HZ1
+SLA    DH7    0 0 HZ6   0 0 HZ1
+SLA    DH8    0 0 HZ7   0 0 HZ1
+SLA    DH9    0 0 HZ8   0 0 HZ1
+SLA    DH10   0 0 HZ9   0 0 HZ1
+
+END
+Z001        N1  -D1            /25:10/1
+Z002        D2  -D6            /23:10/1
+
+** Регистрационыые зоны плотности потока фотонов вплотную к ТВС
+Z100        D3 -S1  DH1  #  m=10    z=100
+Z101        D3 -S1  DH2  #  m=10    z=101
+Z102        D3 -S1  DH3  #  m=10    z=102
+Z103        D3 -S1  DH4  #  m=10    z=103
+Z104        D3 -S1  DH5  #  m=10    z=104
+Z105        D3 -S1  DH6  #  m=10    z=105
+Z106        D3 -S1  DH7  #  m=10    z=106
+Z107        D3 -S1  DH8  #  m=10    z=107
+Z108        D3 -S1  DH9  #  m=10    z=108
+Z109        D3 -S1  DH10 #  m=10    z=109
+
+** Регистрационыые зоны плотности потока фотонов на растоянии 1 см от ТВС
+Z110        D4 -D3  DH1  #  m=10    z=110
+Z111        D4 -D3  DH2  #  m=10    z=111
+Z112        D4 -D3  DH3  #  m=10    z=112
+Z113        D4 -D3  DH4  #  m=10    z=113
+Z114        D4 -D3  DH5  #  m=10    z=114
+Z115        D4 -D3  DH6  #  m=10    z=115
+Z116        D4 -D3  DH7  #  m=10    z=116
+Z117        D4 -D3  DH8  #  m=10    z=117
+Z118        D4 -D3  DH9  #  m=10    z=118
+Z119        D4 -D3  DH10 #  m=10    z=119
+
+** Регистрационыые зоны плотности потока фотонов на растоянии 2 см от ТВС
+Z120        D5 -D4  DH1  #  m=10    z=120
+Z121        D5 -D4  DH2  #  m=10    z=121
+Z122        D5 -D4  DH3  #  m=10    z=122
+Z123        D5 -D4  DH4  #  m=10    z=123
+Z124        D5 -D4  DH5  #  m=10    z=124
+Z125        D5 -D4  DH6  #  m=10    z=125
+Z126        D5 -D4  DH7  #  m=10    z=126
+Z127        D5 -D4  DH8  #  m=10    z=127
+Z128        D5 -D4  DH9  #  m=10    z=128
+Z129        D5 -D4  DH10 #  m=10    z=129
+
+** Регистрационыые зоны плотности потока фотонов на растоянии 3 см от ТВС
+Z130        D6 -D5  DH1  #  m=10    z=130
+Z131        D6 -D5  DH2  #  m=10    z=131
+Z132        D6 -D5  DH3  #  m=10    z=132
+Z133        D6 -D5  DH4  #  m=10    z=133
+Z134        D6 -D5  DH5  #  m=10    z=134
+Z135        D6 -D5  DH6  #  m=10    z=135
+Z136        D6 -D5  DH7  #  m=10    z=136
+Z137        D6 -D5  DH8  #  m=10    z=137
+Z138        D6 -D5  DH9  #  m=10    z=138
+Z139        D6 -D5  DH10 #  m=10    z=139
+
+** Регистрационыые зоны плотности потока фотонов на растоянии 40 см от ТВС
+Z140        D1 -D2  DH1  #  m=10    z=140
+Z141        D1 -D2  DH2  #  m=10    z=141
+Z142        D1 -D2  DH3  #  m=10    z=142
+Z143        D1 -D2  DH4  #  m=10    z=143
+Z144        D1 -D2  DH5  #  m=10    z=144
+Z145        D1 -D2  DH6  #  m=10    z=145
+Z146        D1 -D2  DH7  #  m=10    z=146
+Z147        D1 -D2  DH8  #  m=10    z=147
+Z148        D1 -D2  DH9  #  m=10    z=148
+Z149        D1 -D2  DH10 #  m=10    z=149
+
+
+
+Z003        S1   -S2           /23:5/1
+Z004        S3                 /21:7/1
+Z005  (L1)  S2   -S3           /26:10/1
+END
+
+***************************************************
+**         ОПИСАНИЕ ТВЭЛ
+***************************************************
+C=      Элемент сети "тяжелый" твэл
+CELL    TV2
+SHEX N1      STEPT       HTW
+C=    TELA TVELA
+RCZ  N2     0.,0.,0.     HTW    0.29227
+RCZ  N3     0.,0.,0.     HTW    0.13843
+RCZ  N4     0.,0.,0.     HTW    0.12128
+RCZ  N5     0.,0.,0.     HTW    0.2375
+
+END
+F001        1  -2                   /2:10/1
+F002        2  -5                   /3:15/1
+F003        4                       /4:11/1
+F004        3  -4                   /4:5/1
+F005        5 -3         # m=2   z=49  o=1
+END
+
+*************************************************
+C=   Элемент сети толстый СВП типа 968.05.000-01
+CELL   TIP2
+SHEX N1      STEPT      HTW
+RCZ  N2     0.,0.,0.    HTW    0.29
+RCZ  N6     0.,0.,0.    HTW    0.2375
+END
+P001        1  -2                     /2:10/1
+P002        2  -6                     /4:5/1
+P006        6                         /1:3/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(1)
+CELL   TIP31
+SHEX N1     STEPT       HTW
+RCZ  N2    -CVR  0  0.0    HTW   0.225
+RCZ  N6    -CVR  0  0.0    HTW   0.180
+END
+P001        1  -2                     /2:10/1
+P002        2  -6                     /4:5/1
+P006        6                         /1:4/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(2)
+CELL   TIP32
+SHEX N1      STEPT       HTW
+RCZ  N2    -CVRX  CVRY  0   HTW   0.225
+RCZ  N6    -CVRX  CVRY  0   HTW   0.180
+END
+P001        1  -2                     /2:10/1
+P002        2  -6                     /4:5/1
+P006        6                         /1:4/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(3)
+CELL   TIP33
+SHEX N1      STEPT       HTW
+RCZ  N2     CVRX  CVRY   0   HTW   0.225
+RCZ  N6     CVRX  CVRY   0   HTW   0.180
+END
+P001        1  -2                     /2:10/1
+P002        2  -6                           /4:5/1
+P006        6                               /1:4/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(4)
+CELL   TIP34
+SHEX N1      STEPT       HTW
+RCZ  N2     CVR   0.0    0   HTW   0.225
+RCZ  N6     CVR   0.0    0   HTW   0.180
+END
+P001        1  -2                    /2:10/1
+P002        2  -6                           /4:5/1
+P006        6                               /1:4/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(5)
+CELL   TIP35
+SHEX N1      STEPT       HTW
+RCZ  N2     CVRX  -CVRY   0   HTW   0.225
+RCZ  N6     CVRX  -CVRY   0   HTW   0.180
+END
+P001        1  -2                   /2:10/1
+P002        2  -6                           /4:5/1
+P006        6                               /1:4/1
+END
+*************************************************
+C=   Элемент сети СВП типа 968.04.000(6)
+CELL   TIP36
+SHEX N1      STEPT       HTW
+RCZ  N2    -CVRX  -CVRY   0   HTW   0.225
+RCZ  N6    -CVRX  -CVRY   0   HTW   0.180
+END
+P001        1  -2                          /2:10/1
+P002        2  -6                           /4:5/1
+P006        6                               /1:4/1
+END
+
+**************************************************
+C=   Элемент сети циркониевых вытеснителей
+CELL   RIN11
+SHEX N1      STEPT       HTW
+RCZ  N2    -CVR  0    0.0   HTW    0.225                                        
+RCZ  N3    -CVR  0    0.0   HTW    0.180                                                                              
+END                                                                                 
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+CELL   RIN12
+SHEX N1      STEPT       HTW
+RCZ  N2     -CVRX  CVRY     0.0   HTW    0.225 
+RCZ  N3     -CVRX  CVRY     0.0   HTW    0.180 
+END
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+CELL   RIN13
+SHEX N1      STEPT       HTW
+RCZ  N2    CVRX  CVRY    0.0   HTW    0.225 
+RCZ  N3    CVRX  CVRY    0.0   HTW    0.180 
+END
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+CELL   RIN14
+SHEX N1      STEPT       HTW
+RCZ  N2    CVR   0.0    0.0   HTW    0.225                                        
+RCZ  N3    CVR   0.0    0.0   HTW    0.180                                                                              
+END                                                                                 
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+CELL   RIN15
+SHEX N1      STEPT       HTW
+RCZ  N2     CVRX   -CVRY     0.0   HTW    0.225 
+RCZ  N3     CVRX   -CVRY     0.0   HTW    0.180 
+END
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+CELL   RIN16
+SHEX N1      STEPT       HTW
+RCZ  N2    -CVRX -CVRY    0.0   HTW    0.225 
+RCZ  N3    -CVRX -CVRY    0.0   HTW    0.180 
+END
+P001        1  -2                           /26:10/1                                
+P002        2  -3                           /23:5/1
+P003        3                               /24:5/1
+END
+*************************************************
+*       Сеть ТВС основного массива 1-го типа
+NET     L1     -1.40  -2.42487  0.0   9,9
+T01                 TIP33  TV2  TV2  TV2  RIN12                 4*0
+T02                TV2  TV2  TV2  TV2  TV2  TV2                 3*0
+T03             TV2  TV2  TV2  TV2  TIP2 TV2  TV2               2*0
+T04          TV2  TV2  TV2  TV2  TV2  TV2  TV2  TV2             1*0
+T05     RIN14  TV2  TIP2 TV2  TIP2  TV2  TV2  TV2  TIP31
+T06    1*0   TV2  TV2  TV2  TV2  TV2  TV2  TV2  TV2
+T07    2*0      TV2  TV2  TV2  TV2  TIP2 TV2  TV2
+T08    3*0         TV2  TV2  TV2  TV2  TV2  TV2
+T09    4*0          TIP35  TV2  TV2  TV2  RIN16
+END
+*************************************************
+C=C    SHOW
+FINISH
+*************  Распределенный по а.з. простой источник нейтронов  **********
+NPS      1
+PROB     1
+ANGLEN   SS NO
+MDIS     S
+EDIS     D 1
+#INCLUDE STA0
+**EMES     1E+7
+EPRO     1
+TYPE     PH
+RCZ      0   0    18.4    9.2    3.0
+SNAM     SS
+REPER    1   0   0
+NOBJ     0
+FINISH SPNT
+******************************************************************************
+RGS    1   0
+NUCOFF
+NRET 4312
+PTYPE  2
+TTYPE  1
+ZFLU   100-149
+** Разбиение энергии в 22 групповом приближении для программы ORIGEN
+ENERGY  0.0 1E+4 1.25E+4 1.75E+4 2.25E+4 3.75E+4 4.25E+4 5.75E+4 6.25E+4 7.75E+4 1.25E+5 1.75E+5 2.25E+5 3.75E+5 4.25E+5 5.75E+5 6.25E+5 9.75E+5 1.025E+6 3E+6 5E+6 7E+6 9E+6 1.1E+7
+ENERGY  0.0
+END
+FINISH REG
+ISTR   1
+NTOT   1000
+NBAT   1
+FINISH MODELTRACK
+NAMVAR 14103MP_876
+MAXSER 2000000
+NPRI   0
+DTZML  10000
+ECUP   10000
+FINISH
+** VARIANT WAS PREPARED BY VASYATKIN A.G. physnet@okbm.nnov.ru
