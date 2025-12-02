@@ -1,7 +1,7 @@
-SCALE Job started on ‚â 02/05/2023 13:21:14
-With Host name C49501
-working directory C:\Users\user\AppData\Local\Temp\scale.user.5372
-and process id 5372.
-Input file named D:\Works\Belin\VasDis\Origens\16-6_4.inp
-and output file named D:\Works\Belin\VasDis\Origens\16-6_4.out
+SCALE Job started on ‚â 02/12/2025 20:55:46
+With Host name LAPTOP-C4ILMA1D
+working directory C:\Users\79063\AppData\Local\Temp\scale.79063.8112
+and process id 8112.
+Input file named C:\Users\79063\Documents\GitHub\TVS_dose_2\Origens\16-6_4.inp
+and output file named C:\Users\79063\Documents\GitHub\TVS_dose_2\Origens\16-6_4.out
 ##########################################################

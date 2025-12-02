@@ -55,7 +55,7 @@ RefDetEffectivenessField = "Eff"
 # ORIGEN-related constants
 OrigenDIRName = "Origens"
 template_file_name = "Origen_template.inp"
-scale_bin = "d:\\SCALE-6.2.4\\bin\\scalerte.exe"
+scale_bin = "c:\\SCALE-6.2.4\\bin\\scalerte.exe"
 MARKER_T = "t=[ 1234567890987654321.1234567890987654321 ]"
 MARKER_PWR = "power = [ 1234567890987654321.1234567890987654321e38 ]"
 MARKER_TREG = "tt=[ 12 34 56 78 90 98 76 54 32 10 ]"

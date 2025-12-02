@@ -2,7 +2,7 @@
  *                                                                             *
  *                                 SCALE 6.2.4                                 *
  *                                -------------                                *
- *                                  ??? 2023                                   *
+ *                                ??????? 2025                                 *
  *                                                                             *
  *           SCALE:  A Comprehensive Modeling and Simulation Suite             *
  *                   for Nuclear Safety Analysis and Design                    *
@@ -18,16 +18,16 @@
       
                   Job Information
                   ---------------
-      Job started on C49501 on ?? 02/05/2023 13:20:49
-      Working directory: C:\Users\user\AppData\Local\Temp\scale.user.3580
-      Input file name  : D:\Works\Belin\VasDis\Origens\16-6_2.inp
-      Output file name : D:\Works\Belin\VasDis\Origens\16-6_2.out
-      SCALE executable : D:\SCALE-6.2.4/bin/scale
+      Job started on LAPTOP-C4ILMA1D on ?? 02/12/2025 20:55:18
+      Working directory: C:\Users\79063\AppData\Local\Temp\scale.79063.9992
+      Input file name  : C:\Users\79063\Documents\GitHub\TVS_dose_2\Origens\16-6_2.inp
+      Output file name : C:\Users\79063\Documents\GitHub\TVS_dose_2\Origens\16-6_2.out
+      SCALE executable : C:\SCALE-6.2.4/bin/scale
       
  *******************************************************************************
 
 
-    module couple will be called on Tue May 02 13:20:49 2023.
+    module couple will be called on Tue Dec 02 20:55:18 2025.
     sequence specification record:=couple
 Input Data:
 
@@ -122,20 +122,20 @@ end
         *****                                                                                                              *****
         *****        creation date:   unknown                                                                              *****
         *****                                                                                                              *****
-        *****              library:  D:\SCALE-6.2.4\bin                                                                    *****
+        *****              library:  C:\SCALE-6.2.4\bin                                                                    *****
         *****                                                                                                              *****
         *****                                                                                                              *****
         *****            prod code:  couple.exe                                                                            *****
         *****                                                                                                              *****
         *****              version:  6.2.4                                                                                 *****
         *****                                                                                                              *****
-        *****              jobname:  user                                                                                  *****
+        *****              jobname:  79063                                                                                 *****
         *****                                                                                                              *****
-        *****         machine name:  C49501                                                                                *****
+        *****         machine name:  LAPTOP-C4ILMA1D                                                                       *****
         *****                                                                                                              *****
-        *****    date of execution:  02_may_2023                                                                           *****
+        *****    date of execution:  02_dec_2025                                                                           *****
         *****                                                                                                              *****
-        *****    time of execution:  13:20:49.95                                                                           *****
+        *****    time of execution:  20:55:18.87                                                                           *****
         *****                                                                                                              *****
         *****                                                                                                              *****
         ************************************************************************************************************************
@@ -9318,13 +9318,13 @@ end
 0the fission product transitions for 1002570 were not used.
 1
 0 * normal termination *  
-    module couple used 1.17768 seconds cpu time for the current pass.
+    module couple used 0.561612 seconds cpu time for the current pass.
 
-    module couple is finished. completion code    0. total cpu time used 5.4174e-006 seconds.
+    module couple is finished. completion code    0. total cpu time used 7.9e-006 seconds.
 
 
 
-    module origens will be called on Tue May 02 13:20:51 2023.
+    module origens will be called on Tue Dec 02 20:55:19 2025.
     sequence specification record:=origens
 Input Data:
 
@@ -9452,20 +9452,20 @@ end
         *****                                                                                                              *****
         *****        creation date:   unknown                                                                              *****
         *****                                                                                                              *****
-        *****              library:  D:\SCALE-6.2.4\bin                                                                    *****
+        *****              library:  C:\SCALE-6.2.4\bin                                                                    *****
         *****                                                                                                              *****
         *****                                                                                                              *****
         *****            prod code:  origen.exe                                                                            *****
         *****                                                                                                              *****
         *****              version:  6.2.4                                                                                 *****
         *****                                                                                                              *****
-        *****              jobname:  user                                                                                  *****
+        *****              jobname:  79063                                                                                 *****
         *****                                                                                                              *****
-        *****         machine name:  C49501                                                                                *****
+        *****         machine name:  LAPTOP-C4ILMA1D                                                                       *****
         *****                                                                                                              *****
-        *****    date of execution:  02_may_2023                                                                           *****
+        *****    date of execution:  02_dec_2025                                                                           *****
         *****                                                                                                              *****
-        *****    time of execution:  13:20:51.09                                                                           *****
+        *****    time of execution:  20:55:19.41                                                                           *****
         *****                                                                                                              *****
         *****                                                                                                              *****
         ************************************************************************************************************************
@@ -9486,7 +9486,7 @@ end
 -------------------------------------------------------------------------------------------------------------------------
 ###   Library settings                                                                                                ###
 .
-                                Library file name:     C:/Users/user/AppData/Local/Temp/scale.user.3580/ft33f001
+                                Library file name:     C:/Users/79063/AppData/Local/Temp/scale.79063.9992/ft33f001
                              Library set position:              1
                  Fission product reaction removal:             no
 -------------------------------------------------------------------------------------------------------------------------
@@ -9543,7 +9543,7 @@ becquerels                                                                    1.
 -------------------------------------------------------------------------------------------------------------------------
 ###   Library settings                                                                                                ###
 .
-                                Library file name:     C:/Users/user/AppData/Local/Temp/scale.user.3580/ft33f001
+                                Library file name:     C:/Users/79063/AppData/Local/Temp/scale.79063.9992/ft33f001
                              Library set position:              1
                  Fission product reaction removal:             no
 -------------------------------------------------------------------------------------------------------------------------
@@ -9886,7 +9886,7 @@ becquerels                                                                    1.
 =========================================================================================================================
 =   Library summary for case 'irrad' (#1/2)                                                                             =
 -------------------------------------------------------------------------------------------------------------------------
-filename: C:/Users/user/AppData/Local/Temp/scale.user.3580/ft33f001 cross-section data taken from position number: 1
+filename: C:/Users/79063/AppData/Local/Temp/scale.79063.9992/ft33f001 cross-section data taken from position number: 1
 library title delimited by {}: 
 {}
 date library was produced: 0/0/0
@@ -10386,7 +10386,7 @@ missing spectra        0.0000E+00  0.0000E+00  9.2580E+03  1.0061E+04  2.3768E+0
 =========================================================================================================================
 =   Library summary for case 'decay' (#2/2)                                                                             =
 -------------------------------------------------------------------------------------------------------------------------
-filename: C:/Users/user/AppData/Local/Temp/scale.user.3580/ft33f001 cross-section data taken from position number: 1
+filename: C:/Users/79063/AppData/Local/Temp/scale.79063.9992/ft33f001 cross-section data taken from position number: 1
 library title delimited by {}: 
 {}
 date library was produced: 0/0/0
@@ -10610,16 +10610,16 @@ missing spectra        1.0402E+04  5.9274E-01  2.3184E-02  1.1588E-03  1.0117E-0
 =========================================================================================================================
 ORIGEN finished successfully.
 =========================================================================================================================
-    module origen used 11.0957 seconds cpu time for the current pass.
+    module origen used 12.2578 seconds cpu time for the current pass.
 
-    module origens is finished. completion code    0. total cpu time used 3.42152e-006 seconds.
+    module origens is finished. completion code    0. total cpu time used 2e-006 seconds.
 
 
-    SCALE is finished on Tue May 02 13:21:02 2023.
+    SCALE is finished on Tue Dec 02 20:55:31 2025.
 -------------------------- Summary --------------------------
-couple finished. used 1.17846 seconds.
-origens finished. used 11.0966 seconds.
-SCALE driver required a maximum of 9.848 MiB of RAM.
+couple finished. used 0.562869 seconds.
+origens finished. used 12.2596 seconds.
+SCALE driver required a maximum of 10.59 MiB of RAM.
 ------------------------ End Summary ------------------------
 
-ft71f001 copied to D:\Works\Belin\VasDis\Origens\16-6_2.f71.
+ft71f001 copied to C:\Users\79063\Documents\GitHub\TVS_dose_2\Origens\16-6_2.f71.
