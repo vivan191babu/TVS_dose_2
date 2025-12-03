@@ -102,3 +102,6 @@ Origens/16-6_8.msg
 Origens/16-6_8.out
 Origens/16-6_9.msg
 Origens/16-6_9.out
+__pycache__/Chart.cpython-310.pyc
+__pycache__/CreateLogsDir.cpython-310.pyc
+Logs/Chart.log
