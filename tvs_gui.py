@@ -1,192 +1,251 @@
+# tvs_gui.py
 import os
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-import Test_plan as tp  # модуль из твоего проекта
+import Test_plan
+import Chart
+import plot_from_file
+from planning import estimate_power_scale
+from tuk_stub import TUKStubParams
 
-# Базовый каталог – там, где лежит этот скрипт
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULTS_DIR = os.path.join(BASE_DIR, "Core_FAs")  # папка с результатами расчёта от ячеек
 
-
-class TVSDoseApp(tk.Tk):
+class TVSGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("TVS_dose – расчёт дозы по ячейке")
-        self.geometry("520x260")
-        self.resizable(False, False)
+        self.title("TVS_dose_2 — расчёт и визуализация")
+        self.geometry("1200x700")
 
-        self.static_initialized = False
-        self.algorithms = None
-        self.greens = None
+        self.last_cell = tk.StringVar(value="1-1")
+        self.last_time = tk.StringVar(value="10")
+        self.last_output_file = tk.StringVar(value="")
 
-        self._build_ui()
+        # planning controls
+        self.plan_limit = tk.StringVar(value="1000")   # мкЗв/ч (пример)
+        self.plan_tcheck = tk.StringVar(value="0")
+        self.plan_safety = tk.StringVar(value="0.95")
+        self.plan_crit = tk.StringVar(value="ALL_MAX")
 
-    def _build_ui(self):
-        # --- Блок 1. Инициализация статики ---
-        frame_static = ttk.LabelFrame(self, text="Шаг 1. Инициализация статики")
-        frame_static.pack(fill="x", padx=10, pady=10)
+        self.tuk_nfas = tk.StringVar(value="7")
+        self.tuk_k_surf = tk.StringVar(value="0.08")
+        self.tuk_k_1m = tk.StringVar(value="0.015")
 
-        self.static_status = ttk.Label(
-            frame_static, text="Статус: статика не инициализирована"
+        # profile time
+        self.profile_t = tk.StringVar(value="10")
+
+        # Notebook
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True)
+
+        self.tab_calc = ttk.Frame(self.nb)
+        self.tab_plot = ttk.Frame(self.nb)
+
+        self.nb.add(self.tab_calc, text="Расчёт")
+        self.nb.add(self.tab_plot, text="Графики")
+
+        self._build_calc_tab()
+        self._build_plot_tab()
+
+    # ---------------- UI ----------------
+    def _build_calc_tab(self):
+        top = ttk.Frame(self.tab_calc, padding=10)
+        top.pack(fill="x")
+
+        ttk.Button(top, text="1) Инициализировать статику", command=self.on_init_static).pack(side="left")
+        ttk.Label(top, text="   Ячейка:").pack(side="left", padx=(15, 3))
+        ttk.Entry(top, width=10, textvariable=self.last_cell).pack(side="left")
+
+        ttk.Label(top, text="Время, ч:").pack(side="left", padx=(10, 3))
+        ttk.Entry(top, width=10, textvariable=self.last_time).pack(side="left")
+
+        ttk.Button(top, text="2) Рассчитать", command=self.on_calc).pack(side="left", padx=(15, 0))
+
+        mid = ttk.Frame(self.tab_calc, padding=10)
+        mid.pack(fill="x")
+
+        ttk.Label(mid, text="Выходной файл:").pack(side="left")
+        ttk.Entry(mid, width=80, textvariable=self.last_output_file).pack(side="left", padx=8)
+
+        ttk.Button(mid, text="Построить графики", command=self.refresh_plots).pack(side="left", padx=8)
+
+        # Planning block
+        grp = ttk.LabelFrame(self.tab_calc, text="Планирование по дозовым ограничениям (оценка масштаба мощности)", padding=10)
+        grp.pack(fill="x", padx=10, pady=10)
+
+        row1 = ttk.Frame(grp)
+        row1.pack(fill="x")
+        ttk.Label(row1, text="Ограничение, (ед. как в файле):").pack(side="left")
+        ttk.Entry(row1, width=12, textvariable=self.plan_limit).pack(side="left", padx=6)
+        ttk.Label(row1, text="t контроля, ч:").pack(side="left", padx=(10, 3))
+        ttk.Entry(row1, width=8, textvariable=self.plan_tcheck).pack(side="left")
+        ttk.Label(row1, text="коэф. запаса:").pack(side="left", padx=(10, 3))
+        ttk.Entry(row1, width=8, textvariable=self.plan_safety).pack(side="left")
+
+        row2 = ttk.Frame(grp)
+        row2.pack(fill="x", pady=(8, 0))
+        ttk.Label(row2, text="Критерий:").pack(side="left")
+        crit = ttk.Combobox(
+            row2, width=18, textvariable=self.plan_crit, state="readonly",
+            values=["TVS_NEAR_MAX", "TVS_FAR_MAX", "TUK_SURFACE", "TUK_1M", "ALL_MAX"]
         )
-        self.static_status.pack(side="left", padx=5, pady=5)
+        crit.pack(side="left", padx=6)
 
-        self.btn_init = ttk.Button(
-            frame_static, text="Инициализировать", command=self.on_init_static
-        )
-        self.btn_init.pack(side="right", padx=5, pady=5)
+        ttk.Label(row2, text="ТУК: N ТВС=").pack(side="left", padx=(10, 3))
+        ttk.Entry(row2, width=6, textvariable=self.tuk_nfas).pack(side="left")
+        ttk.Label(row2, text="k_пов=").pack(side="left", padx=(10, 3))
+        ttk.Entry(row2, width=6, textvariable=self.tuk_k_surf).pack(side="left")
+        ttk.Label(row2, text="k_1м=").pack(side="left", padx=(10, 3))
+        ttk.Entry(row2, width=6, textvariable=self.tuk_k_1m).pack(side="left")
 
-        # --- Блок 2. Ввод ячейки и времени ---
-        frame_calc = ttk.LabelFrame(self, text="Шаг 2. Расчёт дозы для ячейки")
-        frame_calc.pack(fill="x", padx=10, pady=10)
+        ttk.Button(row2, text="Оценить коэффициент масштаба мощности", command=self.on_plan).pack(side="left", padx=12)
 
-        row1 = ttk.Frame(frame_calc)
-        row1.pack(fill="x", padx=5, pady=5)
-        ttk.Label(row1, text="Ячейка ТВС (cell):").pack(side="left")
-        self.entry_cell = ttk.Entry(row1, width=15)
-        self.entry_cell.pack(side="left", padx=5)
+        # Log
+        self.log = tk.Text(self.tab_calc, height=18)
+        self.log.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        row2 = ttk.Frame(frame_calc)
-        row2.pack(fill="x", padx=5, pady=5)
-        ttk.Label(row2, text="Время расчёта, ч:").pack(side="left")
-        self.entry_hours = ttk.Entry(row2, width=10)
-        self.entry_hours.pack(side="left", padx=5)
+    def _build_plot_tab(self):
+        # Внутри вкладки "Графики" делаем ещё один Notebook, чтобы показывать два графика
+        top = ttk.Frame(self.tab_plot, padding=10)
+        top.pack(fill="x")
 
-        self.btn_calc = ttk.Button(
-            frame_calc, text="Рассчитать", command=self.on_calc
-        )
-        self.btn_calc.pack(side="right", padx=5, pady=5)
+        ttk.Label(top, text="t для профиля (ч):").pack(side="left")
+        ttk.Entry(top, width=10, textvariable=self.profile_t).pack(side="left", padx=6)
+        ttk.Button(top, text="Обновить профиль", command=self.refresh_profile_only).pack(side="left", padx=6)
 
-        # --- Блок 3. Результат ---
-        self.result_label = ttk.Label(self, text="Выходной файл: —")
-        self.result_label.pack(fill="x", padx=10, pady=10)
+        ttk.Label(top, text="Файл:").pack(side="left", padx=(20, 3))
+        ttk.Label(top, textvariable=self.last_output_file).pack(side="left")
 
-    # ----------------- Колбэки -----------------
+        self.nb_plot = ttk.Notebook(self.tab_plot)
+        self.nb_plot.pack(fill="both", expand=True)
+
+        self.tab_time = ttk.Frame(self.nb_plot)
+        self.tab_prof = ttk.Frame(self.nb_plot)
+        self.nb_plot.add(self.tab_time, text="Dose(t) — вплотную")
+        self.nb_plot.add(self.tab_prof, text="Profile(z) — вплотную/40см")
+
+        self.chart_time = Chart.ChartMainWindow(self.tab_time)
+        self.chart_prof = Chart.ChartMainWindow(self.tab_prof)
+
+    # ---------------- actions ----------------
+    def log_line(self, s: str):
+        self.log.insert("end", s + "\n")
+        self.log.see("end")
 
     def on_init_static(self):
-        """Инициализация статики через InitStaticArray()."""
-        try:
-            self.static_status.config(text="Статус: идёт инициализация...")
-            self.update_idletasks()
+        def work():
+            try:
+                Test_plan.InitStaticArray()
+                self.after(0, lambda: self.log_line("InitStaticArray: успешно"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Ошибка инициализации", str(e)))
 
-            # вызываем инициализацию статики
-            res = tp.InitStaticArray() 
-
-            # Пытаемся взять результат либо из возврата функции,
-            # либо из глобальных переменных модуля Test_plan
-            if isinstance(res, tuple) and len(res) == 2:
-                algorithms, greens = res
-            else:
-            # в твоём текущем коде InitStaticArray() просто
-            # заполняет глобальные переменные tp.Algorithms и tp.Greens
-                algorithms = getattr(tp, "Algorithms", None)
-                greens = getattr(tp, "Greens", None)
-
-            if algorithms is None or greens is None:
-                raise RuntimeError("InitStaticArray не вернула данные и не заполнила Algorithms/Greens")
-    
-            tp.Algorithms = algorithms
-            tp.Greens = greens
-            self.algorithms = algorithms
-            self.greens = greens  
-            self.static_initialized = True
-            self.static_status.config(
-                text=f"Статус: статика инициализирована (алгоритмов: {len(algorithms)})"
-                )
-        except Exception as e:
-            self.static_initialized = False
-            self.static_status.config(text="Статус: ошибка инициализации")
-            messagebox.showerror(
-                "Ошибка",
-                f"Не удалось инициализировать статику:\n{e}",
-            )
+        threading.Thread(target=work, daemon=True).start()
 
     def on_calc(self):
-        """Запуск ProcessCell с выбранной ячейкой и временем."""
-        if not self.static_initialized:
-            messagebox.showwarning(
-                "Нет статики",
-                "Сначала инициализируйте статику (Шаг 1).",
-            )
-            return
-
-        cell = self.entry_cell.get().strip()
-        if not cell:
-            messagebox.showwarning(
-                "Нет ячейки",
-                "Укажите идентификатор ячейки (например, 1-1).",
-            )
-            return
-
-        hours_str = self.entry_hours.get().strip()
+        cell = self.last_cell.get().strip()
         try:
-            hours = float(hours_str)
-            if hours <= 0:
-                raise ValueError
+            t_h = float(self.last_time.get().replace(",", "."))
         except Exception:
-            messagebox.showwarning(
-                "Некорректное время",
-                "Введите положительное число часов (например, 320).",
-            )
+            messagebox.showerror("Ошибка", "Некорректное время (ч).")
             return
 
-        # Снимем список файлов в каталоге результатов ДО расчёта
-        try:
-            before_files = (
-                set(os.listdir(RESULTS_DIR)) if os.path.isdir(RESULTS_DIR) else set()
-            )
-        except Exception:
-            before_files = set()
-
-        try:
-            self.result_label.config(text="Выполняется расчёт...")
-            self.update_idletasks()
-
-            # Запуск основного расчёта
-            tp.ProcessCell(cell, hours)
-
-            # Список файлов ПОСЛЕ расчёта
+        def work():
             try:
-                after_files = (
-                    set(os.listdir(RESULTS_DIR))
-                    if os.path.isdir(RESULTS_DIR)
-                    else set()
-                )
-            except Exception:
-                after_files = set()
+                out_file = Test_plan.ProcessCell_AndReturnFile(cell, t_h)
+                self.after(0, lambda: self._after_calc(out_file))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Ошибка расчёта", str(e)))
 
-            new_files = sorted(after_files - before_files)
+        self.log_line(f"Расчёт: cell={cell}, time={t_h} ч ...")
+        threading.Thread(target=work, daemon=True).start()
 
-            if new_files:
-                # Обычно будет один файл, но покажем все новые
-                files_str = ", ".join(new_files)
-                self.result_label.config(
-                    text=f"Выходной файл(ы): {files_str}"
-                )
-                messagebox.showinfo(
-                    "Расчёт завершён",
-                    "Расчёт успешно выполнен.\n"
-                    "Новые файлы в каталоге Core_FAs:\n" + "\n".join(new_files),
-                )
-            else:
-                self.result_label.config(
-                    text="Выходной файл: не обнаружен (проверьте папку Core_FAs)"
-                )
-                messagebox.showinfo(
-                    "Расчёт завершён",
-                    "Расчёт выполнен, но новые файлы в Core_FAs не обнаружены.\n"
-                    "Проверьте логи и настройки.",
-                )
+    def _after_calc(self, out_file: str):
+        self.last_output_file.set(out_file)
+        self.profile_t.set(self.last_time.get())
+        self.log_line(f"Готово. Файл: {out_file}")
+        # Автообновление графиков
+        self.refresh_plots()
+        # Переключаемся на вкладку графиков
+        self.nb.select(self.tab_plot)
 
+    def refresh_plots(self):
+        path = self.last_output_file.get().strip()
+        if not path:
+            messagebox.showwarning("Нет данных", "Сначала выполните расчёт.")
+            return
+        try:
+            times, near, far = plot_from_file.read_core_fa_file(path)
         except Exception as e:
-            self.result_label.config(text="Ошибка при расчёте")
-            messagebox.showerror(
-                "Ошибка",
-                f"Ошибка при выполнении ProcessCell:\n{e}",
+            messagebox.showerror("Ошибка чтения файла", str(e))
+            return
+
+        try:
+            plot_from_file.plot_dose_vs_time(self.chart_time, times, near)
+        except Exception as e:
+            messagebox.showerror("Ошибка построения Dose(t)", str(e))
+            return
+
+        self.refresh_profile_only()
+
+    def refresh_profile_only(self):
+        path = self.last_output_file.get().strip()
+        if not path:
+            return
+        try:
+            times, near, far = plot_from_file.read_core_fa_file(path)
+            t_prof = float(self.profile_t.get().replace(",", "."))
+            plot_from_file.plot_profile_at_time(self.chart_prof, times, near, far, t_prof)
+        except Exception as e:
+            messagebox.showerror("Ошибка построения профиля", str(e))
+
+    def on_plan(self):
+        path = self.last_output_file.get().strip()
+        if not path:
+            messagebox.showwarning("Нет данных", "Сначала выполните расчёт и получите файл результата.")
+            return
+        try:
+            times, near, far = plot_from_file.read_core_fa_file(path)
+
+            limit = float(self.plan_limit.get().replace(",", "."))
+            tchk = float(self.plan_tcheck.get().replace(",", "."))
+            safety = float(self.plan_safety.get().replace(",", "."))
+            crit = self.plan_crit.get().strip()
+
+            tuk_params = TUKStubParams(
+                n_fas=int(float(self.tuk_nfas.get().replace(",", "."))),
+                k_surface=float(self.tuk_k_surf.get().replace(",", ".")),
+                k_1m=float(self.tuk_k_1m.get().replace(",", ".")),
             )
+
+            res = estimate_power_scale(
+                times_h=times,
+                tvs_near_10xT=near,
+                tvs_far_10xT=far,
+                limit_value=limit,
+                t_check_h=tchk,
+                criterion=crit,
+                safety_factor=safety,
+                tuk_params=tuk_params,
+            )
+
+            self.log_line(
+                f"Планирование: criterion={res.limited_by}, t={res.t_check_h:g} ч, "
+                f"value={res.value_at_check:g}, limit={res.limit:g} => scale={res.scale:g}"
+            )
+            messagebox.showinfo(
+                "Результат планирования",
+                f"Оценка коэффициента масштаба мощности: scale = {res.scale:g}\n"
+                f"Ограничивает: {res.limited_by}\n"
+                f"t контроля: {res.t_check_h:g} ч\n"
+                f"значение в точке: {res.value_at_check:g}\n"
+                f"лимит: {res.limit:g}\n\n"
+                f"Интерпретация: мощности в Test_Plan можно умножить на scale."
+            )
+        except Exception as e:
+            messagebox.showerror("Ошибка планирования", str(e))
 
 
 if __name__ == "__main__":
-    app = TVSDoseApp()
+    app = TVSGUI()
     app.mainloop()
