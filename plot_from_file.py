@@ -84,11 +84,21 @@ def plot_dose_vs_time(
     chart.draw_grid(x_min, x_max, y_min, y_max)
 
     # 10 кривых
+    colors10 = [
+        "blue", "red", "green", "orange", "purple",
+        "brown", "magenta", "cyan", "gold", "darkgreen"
+    ]
+
     for i in range(10):
-        chart.plotValues(
-            times_h, near_10xT[i],
-            plotter=lambda xs, ys, i=i: chart.line_plotter(xs, ys)
-        )
+        col = colors10[i % len(colors10)]
+
+        def _plot(xs_plot, ys_plot, ch=chart, c=col):
+            # xs_plot/ys_plot уже в координатах Canvas (их даёт plotValues)
+            ch.line_plotter(xs_plot, ys_plot, fill=c, width=2)
+
+        chart.plotValues(times_h, near_10xT[i], plotter=_plot)
+        chart.log_line(f"Точка {i+1}: цвет {col}")
+
 
     chart.log_line("Построено кривых: 10")
 
@@ -120,8 +130,18 @@ def plot_profile_at_time(
 
     chart.draw_grid(x_min, x_max, y_min, y_max)
 
-    chart.plotValues(z, near_prof, plotter=lambda xs, ys: chart.line_plotter(xs, ys))
-    chart.plotValues(z, far_prof,  plotter=lambda xs, ys: chart.line_plotter(xs, ys))
+    chart.plotValues(
+        z, near_prof,
+        plotter=lambda xs_plot, ys_plot, ch=chart: ch.line_plotter(xs_plot, ys_plot, fill="blue", width=2)
+    )
+    chart.plotValues(
+        z, far_prof,
+        plotter=lambda xs_plot, ys_plot, ch=chart: ch.line_plotter(xs_plot, ys_plot, fill="red", width=2)
+    )
+
+    chart.log_line("Синяя: вплотную")
+    chart.log_line("Красная: 40 см")
+
 
     chart.log_line("Кривые: 2 (вплотную / 40 см)")
 
