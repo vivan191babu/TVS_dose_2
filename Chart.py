@@ -4,10 +4,10 @@ import tkinter, tkinter.ttk
 import math, logging, os
 import CreateLogsDir
 
-ChartAreaSize = (800, 400)
+ChartAreaSize = (800, 360)
 XChartPad = 100
 YChartPad = 20
-XYReserv = 5
+XYReserv = 20
 ChartXGrids = 10
 ChartYGrids = 10
 FontFamily = 'Arial'
@@ -124,12 +124,29 @@ class ChartMainWindow(tkinter.Frame):
         pwr_y = math.ceil(math.log10(y_max - y_min))
         corr_x = (x_max - x_min) / 1.0e10
         corr_y = (y_max - y_min) / 1.0e10
+
         self._chart_x_min = round_order_dwn(x_min + corr_x, pwr_x)
         self._chart_x_max = round_order_up(x_max - corr_x, pwr_x)
         self._chart_y_min = round_order_dwn(y_min + corr_y, pwr_y)
         self._chart_y_max = round_order_up(y_max - corr_y, pwr_y)
-        chart_x_step = (self._chart_x_max - self._chart_x_min) / ChartXGrids
-        chart_y_step = (self._chart_y_max - self._chart_y_min) / ChartYGrids
+
+        # по умолчанию – столько же делений, как и раньше
+        x_grid_num = ChartXGrids
+        y_grid_num = ChartYGrids
+
+        # базовые шаги
+        chart_x_step = (self._chart_x_max - self._chart_x_min) / x_grid_num
+        chart_y_step = (self._chart_y_max - self._chart_y_min) / y_grid_num
+
+        # если диапазон по X целочисленный и не слишком большой,
+        # используем целый шаг 1.0 и столько делений, сколько целых шагов
+        if (abs(self._chart_x_min - round(self._chart_x_min)) < 1e-8 and
+            abs(self._chart_x_max - round(self._chart_x_max)) < 1e-8):
+            int_range = int(round(self._chart_x_max - self._chart_x_min))
+            if int_range > 0 and int_range <= ChartXGrids:
+                x_grid_num = int_range
+                chart_x_step = 1.0
+
 
         self._scale_x = ((ChartAreaSize[0] - XChartPad - XYReserv) /
                          (self._chart_x_max - self._chart_x_min))
@@ -160,7 +177,7 @@ class ChartMainWindow(tkinter.Frame):
                 self._chart_area.delete(objId)
 
         # Draw new grids
-        for x_grid in range(ChartXGrids + 1):
+        for x_grid in range(x_grid_num + 1):
             x = x_grid * chart_x_step * self._scale_x + XChartPad
             y = XYReserv
             x2, y2 = x, ChartAreaSize[1] - YChartPad * 0.9
@@ -177,7 +194,7 @@ class ChartMainWindow(tkinter.Frame):
                          text = mark_text, font = (FontFamily, str(FontSize)))
             self._x_marks.append(textObjId)
 
-        for y_grid in range(ChartYGrids + 1):
+        for y_grid in range(x_grid_num + 1):
             x,  y  = XChartPad * 0.9, (ChartAreaSize[1] -
                      (y_grid * chart_y_step * self._scale_y + YChartPad))
             x2, y2 = ChartAreaSize[0] - XYReserv, y
