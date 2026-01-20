@@ -1,7 +1,5 @@
-__pycache__/DataReader.cpython-310.pyc
-__pycache__/FA_Gamma.cpython-310.pyc
-__pycache__/Test_plan.cpython-310.pyc
-__pycache__/m_print.cpython-310.pyc
+__pycache__/*.pyc
+
 # Generated ORIGEN artifacts
 Origens/*.f71
 Origens/*.inp
@@ -10,3 +8,5 @@ Origens/*.out
 
 # Generated Core_FAs text outputs
 Core_FAs/*.txt
+
+*.log
