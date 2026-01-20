@@ -92,6 +92,10 @@ class TVSGUI(tk.Tk):
 
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.results_dir = os.path.join(self.base_dir, "Core_FAs")
+        # ---- Test_Plan file (selected before init) ----
+        default_plan = os.path.join(self.base_dir, "Configs", "Test_Plan.txt")
+        self.test_plan_path = tk.StringVar(value=default_plan if os.path.isfile(default_plan) else "")
+
 
         # ---- calc inputs ----
         self.last_cell = tk.StringVar(value="1-1")
@@ -132,6 +136,14 @@ class TVSGUI(tk.Tk):
     def _build_calc_tab(self):
         top = ttk.Frame(self.tab_calc, padding=10)
         top.pack(fill="x")
+
+        plan_row = ttk.Frame(self.tab_calc, padding=(10, 0, 10, 10))
+        plan_row.pack(fill="x")
+
+        ttk.Label(plan_row, text="Файл Test_Plan:").pack(side="left")
+        ttk.Entry(plan_row, width=90, textvariable=self.test_plan_path).pack(side="left", padx=8)
+        ttk.Button(plan_row, text="Выбрать...", command=self.on_browse_test_plan).pack(side="left")
+
 
         ttk.Button(top, text="1) Инициализировать статику", command=self.on_init_static).pack(side="left")
 
@@ -229,6 +241,37 @@ class TVSGUI(tk.Tk):
 
         self.chart_time = Chart.ChartMainWindow(self.tab_time)
         self.chart_prof = Chart.ChartMainWindow(self.tab_prof)
+
+    def _show_integrals_after_init(self, info):
+        # Поддержка dict и tuple на случай несовпадения версий
+        if isinstance(info, dict):
+            print("DEBUG type(info) =", type(info))
+            print("DEBUG info =", info)
+            out_path = info["out_path"]
+
+            cell_all = info["cell_all"]
+            w_all = info["w_all"]
+            w_2h_for_cell_all = info.get("w_2h_for_cell_all")
+
+            cell_2h = info["cell_2h"]
+            w_2h = info["w_2h"]
+            w_all_for_cell_2h = info.get("w_all_for_cell_2h")
+        else:
+            # tuple: (out_path, (cell_all,w_all), (cell_2h,w_2h))
+            out_path, (cell_all, w_all), (cell_2h, w_2h) = info
+            w_2h_for_cell_all = None
+            w_all_for_cell_2h = None
+
+        self._after_init_static(
+            out_path,
+            cell_all,
+            w_all,
+            w_2h_for_cell_all,
+            cell_2h,
+            w_2h,
+            w_all_for_cell_2h,
+        )
+
 
     # ---------------- helpers ----------------
     def log_line(self, s: str):
@@ -333,15 +376,77 @@ class TVSGUI(tk.Tk):
         ch.log_line("Красная: 40 см")
         ch.log_line("Файл: " + self._current_result_path())
 
+
+    def _after_init_static(
+        self,
+        out_path: str,
+        cell_all: str,
+        w_all: float,
+        w_2h_for_cell_all: float | None,
+        cell_2h: str,
+        w_2h: float,
+        w_all_for_cell_2h: float | None,
+    ):
+        self.log_line("InitStaticArray: успешно")
+        s1 = f"Макс интеграл за всё время: {cell_all} = {w_all:g} W*hr"
+        if w_2h_for_cell_all is not None:
+            s1 += f" (а за 2 часа: {w_2h_for_cell_all:g} W*hr)"
+        else:
+            s1 += " (а за 2 часа: н/д)"
+
+        s2 = f"Макс интеграл за последние 2 ч: {cell_2h} = {w_2h:g} W*hr"
+        if w_all_for_cell_2h is not None:
+            s2 += f" (а за всё время: {w_all_for_cell_2h:g} W*hr)"
+        else:
+            s2 += " (а за всё время: н/д)"
+
+        self.log_line("InitStaticArray: успешно")
+        self.log_line(s1)
+        self.log_line(s2)
+        self.log_line(f"Файл сводки: {out_path}")
+
+        self.log_line(f"Сводка по всем ТВС сохранена в файл: {out_path}")
+
+        messagebox.showinfo(
+            "Инициализация завершена",
+            "Статика успешно инициализирована.\n\n"
+            f"Макс интеграл (всё время): {cell_all} = {w_all:g} W*hr\n"
+            f"Макс интеграл (последние 2 ч): {cell_2h} = {w_2h:g} W*hr\n\n"
+            f"Файл сводки: {out_path}"
+        )
+
+
     # ---------------- actions ----------------
     def on_init_static(self):
+        # If user didn't choose, use default in repo folder (absolute)
+        plan_path = self.test_plan_path.get().strip()
+        if not plan_path:
+            plan_path = os.path.join(self.base_dir, "Configs", "Test_Plan.txt")
+            self.test_plan_path.set(plan_path)
+
+        plan_path = os.path.abspath(plan_path)
+
         def work():
             try:
-                Test_plan.InitStaticArray()
-                self.after(0, lambda: self.log_line("InitStaticArray: успешно"))
+                # Prefer new signature with plan_file
+                try:
+                    Test_plan.InitStaticArray(plan_file=plan_path)
+                except TypeError:
+                    # Backward compatibility (if signature not updated yet)
+                    if hasattr(Test_plan, "SetCoreTestPlanFile"):
+                        Test_plan.SetCoreTestPlanFile(plan_path)
+                    Test_plan.InitStaticArray()
+
+                info = Test_plan.ExportFAEnergyIntegrals()
+                self.after(0, lambda d=info: self._show_integrals_after_init(d))
+
             except Exception as exc:
-                msg = f"{type(exc).__name__}: {exc}"
-                self.after(0, lambda m=msg: messagebox.showerror("Ошибка инициализации", m))
+                # If this is a plan-format error, show dedicated title
+                if hasattr(Test_plan, "CoreHistoryInvalid") and isinstance(exc, Test_plan.CoreHistoryInvalid):
+                    self.after(0, lambda m=str(exc): messagebox.showerror("Файл не того формата", m))
+                else:
+                    msg = f"{type(exc).__name__}: {exc}"
+                    self.after(0, lambda m=msg: messagebox.showerror("Ошибка инициализации", m))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -432,6 +537,17 @@ class TVSGUI(tk.Tk):
             return
         full_path = os.path.join(self.results_dir, name)
         self.last_output_file.set(full_path)
+
+    def on_browse_test_plan(self):
+        initial = os.path.join(self.base_dir, "Configs")
+        path = filedialog.askopenfilename(
+            title="Выберите файл Test_Plan",
+            initialdir=initial if os.path.isdir(initial) else self.base_dir,
+            filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
+        )
+        if path:
+            self.test_plan_path.set(path)
+
 
     def on_browse_result_file(self):
         initial = self.results_dir if os.path.isdir(self.results_dir) else self.base_dir

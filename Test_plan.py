@@ -13,9 +13,16 @@ MCU_detectors_fn = "MCU_detectors.txt"
 detectors_eff_fn = "detectors_eff.txt"
 MCU_FA_spans = 0     # Will be adjusted during MCU_FAs_fn file parsing
 
+
+
 NEED_HISTRORY_FILES = False
 EXECUTE_NOW = False
 INIT_ONLY = True
+
+# Глобальные объекты (инициализируются через InitStaticArray)
+Algorithms = None
+Greens = None
+CoreHistory = None
 
 # Config files directory
 ConfigDIRName = "Configs"
@@ -64,6 +71,121 @@ DECAY_HOURS = 320
 
 # Result files dir
 ResultsDIRName = "Core_FAs"
+
+
+# --- Core test plan (Test_Plan) selection ---
+# By default TCoreHistory reads Configs/Test_Plan.txt, but GUI may override it.
+CoreTestPlanFile = None  # full path to test plan file, or None for default
+
+
+def SetCoreTestPlanFile(path: str | None):
+    """Override the core test plan file.
+
+    Parameters
+    ----------
+    path:
+        Full path (absolute or relative) to the test plan file.
+        If None or empty, the default Configs/Test_Plan.txt will be used.
+    """
+    global CoreTestPlanFile
+    if path is None:
+        CoreTestPlanFile = None
+        return
+    p = str(path).strip()
+    CoreTestPlanFile = p if p else None
+
+
+# --- Core test plan (Test_Plan) selection ---
+# If None => default Configs/Test_Plan.txt (backward compatible)
+CoreTestPlanFile: str | None = None
+
+
+def SetCoreTestPlanFile(path: str | None):
+    """Set custom core test plan file path (may have any name)."""
+    global CoreTestPlanFile
+    if path is None:
+        CoreTestPlanFile = None
+        return
+    p = str(path).strip()
+    CoreTestPlanFile = os.path.abspath(p) if p else None
+
+
+def GetCoreTestPlanFile() -> str:
+    """Return actual plan file path used by core history reader."""
+    if CoreTestPlanFile:
+        return CoreTestPlanFile
+    # default (old behaviour)
+    return os.path.abspath(os.path.join(os.curdir, ConfigDIRName, TCoreHistory.history_fn))
+
+
+def ValidateCoreTestPlanFile(plan_path: str, algorithms: dict) -> None:
+    """
+    Validate Test_Plan file format.
+
+    Required header fields: t, N(W), Algorithm, FAs
+    Additional checks:
+      - at least 2 records
+      - first power must be ~0
+      - time must be non-decreasing
+      - (Algorithm, FAs) key must exist in 'algorithms'
+    Raises CoreHistoryInvalid on any mismatch.
+    """
+    required = {"t", "N(W)", "Algorithm", "FAs"}
+
+    if not plan_path or not os.path.isfile(plan_path):
+        raise CoreHistoryInvalid(f"file not found: {plan_path}")
+
+    try:
+        rdr = DataReader.TDataReader(plan_path)
+    except Exception as exc:
+        raise CoreHistoryInvalid(str(exc))
+
+    if not rdr.fields or not required.issubset(set(rdr.fields)):
+        raise CoreHistoryInvalid(
+            "unexpected header. Required fields: " + ", ".join(sorted(required))
+        )
+
+    t_i = rdr.find_field_index("t")
+    p_i = rdr.find_field_index("N(W)")
+    a_i = rdr.find_field_index("Algorithm")
+    f_i = rdr.find_field_index("FAs")
+
+    if len(rdr.raw_data) < 2:
+        raise CoreHistoryInvalid("too few data records (need at least 2)")
+
+    # numeric checks + monotonic time
+    try:
+        t0 = float(rdr.raw_data[0][t_i])
+        p0 = float(rdr.raw_data[0][p_i])
+    except Exception:
+        raise CoreHistoryInvalid("t and N(W) must be numeric")
+
+    if p0 > 1e-15:
+        raise CoreHistoryInvalid("first record must have zero power")
+
+    prev_t = t0
+    for line_no, rec in enumerate(rdr.raw_data[1:], start=2):
+        try:
+            t = float(rec[t_i])
+        except Exception:
+            raise CoreHistoryInvalid(f"t is not numeric (line {line_no})")
+
+        if t < prev_t:
+            raise CoreHistoryInvalid(f"time must be non-decreasing (line {line_no})")
+        prev_t = t
+
+        alg_name = rec[a_i]
+        try:
+            n_fas = int(float(rec[f_i]))
+        except Exception:
+            raise CoreHistoryInvalid(f"FAs is not integer-like (line {line_no})")
+
+        key = (alg_name, n_fas)
+        if key not in algorithms:
+            raise CoreHistoryInvalid(
+                f"unknown Algorithm/FAs at line {line_no}: {alg_name} / {n_fas}"
+            )
+
 
 # Core procession exception as a base class
 class CoreProcException(Exception):
@@ -503,7 +625,7 @@ class TCoreHistory(object):
                 ref_alg_key = alg_key
 
         # Read the core test planned schedule
-        fn = os.path.join(os.curdir, ConfigDIRName, type(self).history_fn)
+        fn = GetCoreTestPlanFile()
         self.HistoryReader = DataReader.TDataReader(fn)
         m_print.m_print("Core test plan read successfully")
         m_print.m_print("Fields: ")
@@ -955,21 +1077,162 @@ def ReadStaticData(FINsListFile):
 
     return Algorithms
 
-def InitStaticArray():
-    global Algorithms, Greens
+def InitStaticArray(build_core_history: bool = True, plan_file: str | None = None, validate_plan: bool = True):
+    """
+    Инициализирует статические входные данные проекта.
+
+    build_core_history=True дополнительно строит TCoreHistory (без запуска ORIGEN),
+    что позволяет сразу после инициализации получить интегралы мощности по ТВС.
+
+    plan_file:
+        Пользовательский путь к файлу Test_Plan (может называться иначе).
+        Если None, будет использован стандартный Configs/Test_Plan.txt (как раньше).
+
+    validate_plan:
+        Если True — проверяет, что формат Test_Plan подходит.
+        При отклонении возбуждает CoreHistoryInvalid.
+    """
+    global Algorithms, Greens, CoreHistory
+
+    # 1) Применяем выбранный пользователем файл плана (если передан)
+    if plan_file is not None:
+        SetCoreTestPlanFile(plan_file)
+
+    # 2) Читаем статику (алгоритмы + функции Грина)
     Algorithms = ReadStaticData(FINsListFile)
     Greens = FA_Gamma.readGreenFuncs()
 
+    # 3) Проверяем формат Test_Plan (опционально)
+    if validate_plan:
+        plan_path = GetCoreTestPlanFile()
+        ValidateCoreTestPlanFile(plan_path, Algorithms)
+
+    # 4) Строим CoreHistory (опционально)
+    if build_core_history:
+        CoreHistory = TCoreHistory(Algorithms, Greens)
+
+
 def ProcessCell(cell, hours):
-    global Algorithms, Greens
-    CoreHistory = TCoreHistory(Algorithms, Greens)
+    global Algorithms, Greens, CoreHistory
+    if Algorithms is None or Greens is None:
+        InitStaticArray(build_core_history=True)
+    if CoreHistory is None:
+        CoreHistory = TCoreHistory(Algorithms, Greens)
+
     dose_arrays_Svs = CoreHistory.FACellDoseRate(cell, hours)
     cell_fn = f"{cell}.txt"
     fn = os.path.join(os.curdir, ResultsDIRName, cell_fn)
-    dose_arrays_uSvhr = list()
+
+    dose_arrays_uSvhr = []
     for reg_zone in dose_arrays_Svs:
-        dose_arrays_uSvhr.append([Svs*3600*1e6 for Svs in dose_arrays_Svs[reg_zone]])
+        dose_arrays_uSvhr.append([Svs * 3600 * 1e6 for Svs in dose_arrays_Svs[reg_zone]])
+
     write_data_file(fn, CoreHistory.tregs, *dose_arrays_uSvhr)
+
+
+def _cell_sort_key(cell: str):
+    try:
+        a, b = cell.split('-')
+        return (int(a), int(b))
+    except Exception:
+        return (cell,)
+
+
+def ExportFAEnergyIntegrals(out_path: str | None = None):
+    """
+    Формирует таблицу:
+      cell   Integral_all_time(W*hr)   Integral_last_2h(W*hr)
+
+    Также возвращает:
+      - ячейку с max интегралом за всё время + её значения (all и 2h)
+      - ячейку с max интегралом за 2 часа + её значения (2h и all)
+
+    ВАЖНО: это НЕ запускает ORIGEN и НЕ считает дозу.
+    """
+    global Algorithms, Greens
+
+    if Algorithms is None or Greens is None:
+        raise RuntimeError("Static data not initialized. Call InitStaticArray() first.")
+
+    core = TCoreHistory(Algorithms, Greens)
+
+    # Максимумы (у вас уже рассчитываются внутри TCoreHistory):contentReference[oaicite:2]{index=2}
+    cell_all, w_all = core.Wmax_FA
+    cell_2h, w_2h = core.Wmax_FA2
+
+    # Дополнительно: "второе число" для каждой из этих ячеек
+    w_2h_for_cell_all = core.FAs2[cell_all].FA_burnup if cell_all in core.FAs2 else 0.0
+    w_all_for_cell_2h = core.FAs[cell_2h].FA_burnup if cell_2h in core.FAs else 0.0
+
+    # Выходной файл
+    out_dir = os.path.join(os.curdir, ResultsDIRName)
+    os.makedirs(out_dir, exist_ok=True)
+    if out_path is None:
+        out_path = os.path.join(out_dir, "FA_power_integrals.txt")
+
+    with open(out_path, "wt", encoding="utf-8") as f:
+        f.write("# Cell\tIntegralPower_allTime(W*hr)\tIntegralPower_last2h(W*hr)\n")
+        for cell in sorted(core.FAs.keys(), key=_cell_sort_key):
+            total = core.FAs[cell].FA_burnup
+            last2 = core.FAs2[cell].FA_burnup if cell in core.FAs2 else 0.0
+            f.write(f"{cell}\t{total:.6e}\t{last2:.6e}\n")
+
+    return {
+        "out_path": os.path.abspath(out_path),
+
+        "cell_all": cell_all,
+        "w_all": w_all,
+        "w_2h_for_cell_all": w_2h_for_cell_all,
+
+        "cell_2h": cell_2h,
+        "w_2h": w_2h,
+        "w_all_for_cell_2h": w_all_for_cell_2h,
+    }
+
+
+def _cell_sort_key_legacy(cell: str):
+    # сортировка "1-1", "1-2", . по числам
+    try:
+        a, b = cell.split('-')
+        return (int(a), int(b))
+    except Exception:
+        return (cell,)
+
+
+def ExportFAEnergyIntegrals_tuple(out_path: str | None = None):
+    """
+    LEGACY-ВАРИАНТ: оставлен для совместимости со старым форматом возврата.
+
+    Возвращает:
+      (abs_out_path, Wmax_FA, Wmax_FA2)
+    где W в единицах W*hr.
+    """
+    global Algorithms, Greens, CoreHistory
+    if Algorithms is None or Greens is None:
+        InitStaticArray(build_core_history=True)
+    if CoreHistory is None:
+        CoreHistory = TCoreHistory(Algorithms, Greens)
+
+    out_dir = os.path.join(os.curdir, ResultsDIRName)
+    os.makedirs(out_dir, exist_ok=True)
+    if out_path is None:
+        out_path = os.path.join(out_dir, "FA_power_integrals.txt")
+
+    with open(out_path, "wt", encoding="utf-8") as f:
+        f.write("# Cell\tIntegralPower_allTime(W*hr)\tIntegralPower_last2h(W*hr)\n")
+        for cell in sorted(CoreHistory.FAs.keys(), key=_cell_sort_key_legacy):
+            total = CoreHistory.FAs[cell].FA_burnup
+            last2 = CoreHistory.FAs2[cell].FA_burnup if cell in CoreHistory.FAs2 else 0.0
+            f.write(f"{cell}\t{total:.6e}\t{last2:.6e}\n")
+
+    return os.path.abspath(out_path), CoreHistory.Wmax_FA, CoreHistory.Wmax_FA2
+
+
+# алиас “на всякий случай”
+ExportFAEnergyIntegralsLegacy = ExportFAEnergyIntegrals_tuple
+ExportFAEnergyIntegralsTuple = ExportFAEnergyIntegrals_tuple
+
+
 
 
 if __name__ == "__main__" and EXECUTE_NOW:
