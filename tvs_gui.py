@@ -612,15 +612,40 @@ class TVSGUI(tk.Tk):
                 f"value={res.value_at_check:g}, limit={res.limit:g} => scale={res.scale:g}"
             )
 
-            messagebox.showinfo(
-                "Результат планирования",
-                f"Коэффициент масштаба мощности: scale = {res.scale:g}\n"
-                f"Ограничивает: {res.limited_by}\n"
-                f"t контроля: {res.t_check_h:g} ч\n"
-                f"Значение критерия: {res.value_at_check:g}\n"
-                f"Лимит: {res.limit:g}\n\n"
-                f"Интерпретация: мощности в Test_Plan можно умножить на scale."
-            )
+            # Дополнительно посчитаем уставки АЗ по алгоритмам и сохраним в файл
+            setp = None
+            try:
+                plan_path2 = self.test_plan_path.get().strip() or None
+                if hasattr(Test_plan, 'ExportAZSetpointsByAlgorithm'):
+                    setp = Test_plan.ExportAZSetpointsByAlgorithm(res.scale, plan_file=plan_path2)
+                    self.log_line(f"Уставки АЗ сохранены: {setp['out_path']}")
+                    for r in setp['rows']:
+                        parts = [f"{r['algorithm']} ({r['fas']} FAs):"]
+                        for ch, val in sorted(r['currents_nA'].items()):
+                            parts.append(f"ch{ch}={val:g} нА")
+                        self.log_line("  " + " ".join(parts))
+                else:
+                    self.log_line("Уставки АЗ не рассчитаны: нет ExportAZSetpointsByAlgorithm() в Test_plan.py")
+            except Exception as exc:
+                self.log_line(f"Ошибка при расчёте уставок АЗ: {type(exc).__name__}: {exc}")
+
+            msg_lines = [
+                f"Допустимое масштабирование мощности: scale = {res.scale:g}",
+                f"Ограничение: {res.limited_by}",
+                f"t проверки: {res.t_check_h:g} ч",
+                f"Значение критерия: {res.value_at_check:g}",
+                f"Лимит: {res.limit:g}",
+                "",
+                "Интерпретация: мощности в Test_Plan можно умножить на scale.",
+            ]
+            if setp:
+                msg_lines += [
+                    "",
+                    "Уставки АЗ по алгоритмам записаны в файл:",
+                    setp['out_path'],
+                ]
+
+            messagebox.showinfo('Результат оценки', "\n".join(msg_lines))
         except Exception as exc:
             messagebox.showerror("Ошибка планирования", f"{type(exc).__name__}: {exc}")
 

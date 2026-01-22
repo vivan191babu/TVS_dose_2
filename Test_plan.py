@@ -1190,6 +1190,150 @@ def ExportFAEnergyIntegrals(out_path: str | None = None):
     }
 
 
+def ExportAZSetpointsByAlgorithm(
+    scale: float,
+    plan_file: str | None = None,
+    out_path: str | None = None,
+    *,
+    validate_plan: bool = True,
+):
+    """
+    Рассчитывает уставки токов АЗ по алгоритмам:
+      - берёт максимальные мощности (Pmax) для каждой пары (Algorithm, FAs) из Test_Plan,
+      - применяет коэффициент scale,
+      - умножает на эффективности детекторов и пишет таблицу токов.
+
+    Параметры
+    ---------
+    scale:
+        Масштаб мощности (например, результат estimate_power_scale).
+    plan_file:
+        Полный путь к файлу Test_Plan. Если None — используется CoreTestPlanFile или Configs/Test_Plan.txt.
+    out_path:
+        Куда писать результат. Если None — Core_FAs/AZ_setpoints_by_algorithm.txt.
+    validate_plan:
+        Если True — дополнительно проверяет формат Test_Pлан.
+
+    Возврат
+    -------
+    dict с ключами:
+      {
+        "out_path": <abs path>,
+        "rows": [
+           {
+             "algorithm": <str>,
+             "fas": <int>,
+             "pmax": <float>,
+             "plim": <float>,
+             "currents_A": {<channel>: <float>, ...},
+             "currents_nA": {<channel>: <float>, ...},
+           }, ...
+        ]
+      }
+    """
+    global Algorithms
+
+    if Algorithms is None:
+        raise RuntimeError("Static data not initialized. Call InitStaticArray() first.")
+
+    if plan_file is not None:
+        SetCoreTestPlanFile(plan_file)
+
+    plan_path = GetCoreTestPlanFile()
+    if validate_plan:
+        ValidateCoreTestPlanFile(plan_path, Algorithms)
+
+    rdr = DataReader.TDataReader(plan_path)
+    t_i = rdr.find_field_index("t")
+    p_i = rdr.find_field_index("N(W)")
+    a_i = rdr.find_field_index("Algorithm")
+    f_i = rdr.find_field_index("FAs")
+
+    # 1) max power per (Algorithm, FAs)
+    pmax = {}
+    for rec in rdr.raw_data:
+        try:
+            p = float(rec[p_i])
+        except Exception:
+            continue
+
+        alg_name = str(rec[a_i])
+        try:
+            n_fas = int(float(rec[f_i]))
+        except Exception:
+            continue
+
+        key = (alg_name, n_fas)
+        if key not in Algorithms:
+            # plan ссылается на алгоритм, которого нет в MCUFINs
+            raise CoreHistoryInvalid(f"unknown Algorithm/FAs in plan: {alg_name} / {n_fas}")
+
+        prev = pmax.get(key)
+        if prev is None or p > prev:
+            pmax[key] = p
+
+    # 2) currents per algorithm (per channel)
+    rows = []
+    all_channels = set()
+
+    for (alg_name, n_fas), p_max in sorted(pmax.items(), key=lambda k: (k[0][0], k[0][1])):
+        alg = Algorithms[(alg_name, n_fas)]
+        p_lim = float(scale) * float(p_max)
+
+        currents_A = {}
+        currents_nA = {}
+
+        for ch in sorted(alg.detectors.keys()):
+            det = alg.detectors[ch]
+            if det.effectiveness is None:
+                raise RuntimeError(
+                    f"Detector effectiveness is not set for channel {ch} in algorithm {alg_name}/{n_fas}"
+                )
+            I_A = p_lim * float(det.effectiveness)
+            currents_A[ch] = I_A
+            currents_nA[ch] = I_A * 1e9
+            all_channels.add(ch)
+
+        rows.append(
+            {
+                "algorithm": alg_name,
+                "fas": int(n_fas),
+                "pmax": float(p_max),
+                "plim": float(p_lim),
+                "currents_A": currents_A,
+                "currents_nA": currents_nA,
+            }
+        )
+
+    # 3) output file
+    out_dir = os.path.join(os.curdir, ResultsDIRName)
+    os.makedirs(out_dir, exist_ok=True)
+    if out_path is None:
+        out_path = os.path.join(out_dir, "AZ_setpoints_by_algorithm.txt")
+
+    channels_sorted = sorted(all_channels)
+
+    with open(out_path, "wt", encoding="utf-8") as f:
+        hdr = ["Algorithm", "FAs", "Pmax_W", "Plim_W"]
+        for ch in channels_sorted:
+            hdr.append(f"I_ch{ch}_A")
+        for ch in channels_sorted:
+            hdr.append(f"I_ch{ch}_nA")
+        f.write("# " + "\t".join(hdr) + "\n")
+
+        for r in rows:
+            line = [r["algorithm"], str(r["fas"]), f"{r['pmax']:.6e}", f"{r['plim']:.6e}"]
+            for ch in channels_sorted:
+                val = r["currents_A"].get(ch, 0.0)
+                line.append(f"{val:.6e}")
+            for ch in channels_sorted:
+                val = r["currents_nA"].get(ch, 0.0)
+                line.append(f"{val:.6e}")
+            f.write("\t".join(line) + "\n")
+
+    return {"out_path": os.path.abspath(out_path), "rows": rows}
+
+
 def _cell_sort_key_legacy(cell: str):
     # сортировка "1-1", "1-2", . по числам
     try:
