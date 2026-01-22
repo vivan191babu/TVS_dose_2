@@ -1595,6 +1595,131 @@ def ExportAZSetpointsByAlgorithm(
     return {"out_path": os.path.abspath(out_path), "rows": rows}
 
 
+# -------- Total core energy & U-235 consumption --------
+
+# Physical constants (approximation):
+# - Mean energy release per fission: 200 MeV (thermal)  -> ~3.204e-11 J
+# - 1 fission consumes 1 atom (for "equivalent U-235 mass" estimate)
+_FISSION_ENERGY_MEV = 200.0
+_ELECTRONVOLT_J = 1.602176634e-19
+_FISSION_ENERGY_J = _FISSION_ENERGY_MEV * 1e6 * _ELECTRONVOLT_J  # J/fission
+
+_AVOGADRO = 6.02214076e23  # 1/mol
+_U235_MOLAR_MASS_G = 235.0  # g/mol (engineering accuracy is sufficient here)
+
+
+def ComputeCoreEnergyAndU235(
+    plan_file: str | None = None,
+    *,
+    scale: float = 1.0,
+    validate_plan: bool = True,
+):
+    """
+    Считает суммарную энерговыработку по всей активной зоне по Test_Plan и
+    оценивает эквивалентный расход U-235 (в мкг) по энергии делений.
+
+    Интегрирование выполнено в той же логике, что и в TCoreHistory:
+    для каждого интервала dt = t_i - t_{i-1} берётся мощность из текущей записи i.
+
+    Параметры
+    ---------
+    plan_file : путь к Test_Plan (если None — используется выбранный/стандартный)
+    scale     : множитель мощности (например результат планирования res.scale)
+    validate_plan : проверять формат Test_Plan и валидность Algorithm/FAs
+
+    Возвращает dict:
+      {
+        "plan_path": ...,
+        "scale": ...,
+        "t_start_h": ...,
+        "t_end_h": ...,
+        "duration_h": ...,
+        "energy_Wh": ...,
+        "energy_kWh": ...,
+        "energy_J": ...,
+        "fissions": ...,
+        "u235_g": ...,
+        "u235_ug": ...,
+      }
+    """
+    global Algorithms
+
+    if plan_file is not None:
+        SetCoreTestPlanFile(plan_file)
+
+    plan_path = GetCoreTestPlanFile()
+
+    if validate_plan:
+        # Используем уже имеющуюся проверку (она требует, чтобы Algorithms были инициализированы)
+        if Algorithms is None:
+            raise RuntimeError("Algorithms not initialized. Call InitStaticArray() first.")
+        ValidateCoreTestPlanFile(plan_path, Algorithms)
+
+    rdr = DataReader.TDataReader(plan_path)
+    t_i = rdr.find_field_index("t")
+    p_i = rdr.find_field_index("N(W)")
+
+    if len(rdr.raw_data) < 2:
+        raise CoreHistoryInvalid("too few data records (need at least 2)")
+
+    # Start/End time
+    t0 = float(rdr.raw_data[0][t_i])
+    t_last = float(rdr.raw_data[-1][t_i])
+
+    # Integrate energy
+    energy_Wh = 0.0
+    prev_t = float(rdr.raw_data[0][t_i])
+
+    for rec in rdr.raw_data[1:]:
+        t = float(rec[t_i])
+        p = float(rec[p_i]) * float(scale)  # W
+        dt = t - prev_t                     # hours
+        if dt < 0:
+            raise CoreHistoryInvalid("time must be non-decreasing")
+        energy_Wh += p * dt                 # W*hr
+        prev_t = t
+
+    energy_J = energy_Wh * 3600.0
+    fissions = energy_J / _FISSION_ENERGY_J if energy_J > 0 else 0.0
+
+    # Equivalent U-235 mass (engineering approximation)
+    u235_g = fissions * (_U235_MOLAR_MASS_G / _AVOGADRO)
+    u235_ug = u235_g * 1e6
+
+    return {
+        "plan_path": os.path.abspath(plan_path),
+        "scale": float(scale),
+        "t_start_h": t0,
+        "t_end_h": t_last,
+        "duration_h": (t_last - t0),
+        "energy_Wh": float(energy_Wh),
+        "energy_kWh": float(energy_Wh) / 1000.0,
+        "energy_J": float(energy_J),
+        "fissions": float(fissions),
+        "u235_g": float(u235_g),
+        "u235_ug": float(u235_ug),
+    }
+
+
+def FormatCoreEnergyAndU235Report(info: dict, *, title: str = "Суммарная энерговыработка"):
+    """
+    Удобный формат вывода для GUI/лога.
+    """
+    return (
+        f"{title}:\n"
+        f"  Test_Plan: {info.get('plan_path','')}\n"
+        f"  scale = {info.get('scale', 1.0):g}\n"
+        f"  t: {info.get('t_start_h', 0.0):g} .. {info.get('t_end_h', 0.0):g} ч "
+        f"(Δt={info.get('duration_h', 0.0):g} ч)\n"
+        f"  Энерговыработка: {info.get('energy_Wh',0.0):.6g} W·h "
+        f"({info.get('energy_kWh',0.0):.6g} kW·h)\n"
+        f"  Экв. расход U-235: {info.get('u235_ug',0.0):.6g} мкг "
+        f"({info.get('u235_g',0.0):.6g} г)\n"
+        f"  (оценка по 200 MeV/деление)"
+    )
+
+
+
 def _cell_sort_key_legacy(cell: str):
     # сортировка "1-1", "1-2", . по числам
     try:

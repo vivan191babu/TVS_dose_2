@@ -629,6 +629,26 @@ class TVSGUI(tk.Tk):
             except Exception as exc:
                 self.log_line(f"Ошибка при расчёте уставок АЗ: {type(exc).__name__}: {exc}")
 
+            # --- Суммарная энерговыработка и экв. расход U-235 по всей АЗ ---
+            try:
+                plan_path2 = self.test_plan_path.get().strip() or None
+
+                if hasattr(Test_plan, "ComputeCoreEnergyAndU235") and hasattr(Test_plan, "FormatCoreEnergyAndU235Report"):
+                    info_plan = Test_plan.ComputeCoreEnergyAndU235(plan_file=plan_path2, scale=1.0, validate_plan=True)
+                    info_lim  = Test_plan.ComputeCoreEnergyAndU235(plan_file=plan_path2, scale=res.scale, validate_plan=True)
+
+                    self.log_line("------ Энерговыработка и U-235 ------")
+                    for ln in Test_plan.FormatCoreEnergyAndU235Report(info_plan, title="По Test_Plan (без scale)").splitlines():
+                        self.log_line(ln)
+                    for ln in Test_plan.FormatCoreEnergyAndU235Report(info_lim, title="С учётом scale (по планированию)").splitlines():
+                        self.log_line(ln)
+                    self.log_line("-------------------------------------")
+                else:
+                    self.log_line("Энерговыработка/U-235: нет функций ComputeCoreEnergyAndU235/FormatCoreEnergyAndU235Report в Test_plan.py")
+            except Exception as exc:
+                self.log_line(f"Энерговыработка/U-235 не рассчитаны: {type(exc).__name__}: {exc}")
+
+
             # Дополнительно: оценка тока реактиметра (канал 4) по Test_Plan и проверка порога 0.5 нА
             react = None
             try:
