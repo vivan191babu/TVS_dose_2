@@ -1,0 +1,329 @@
+diff --git a/Test_plan.py b/Test_plan.py
+--- a/Test_plan.py
++++ b/Test_plan.py
+@@ -19,6 +19,96 @@
+ 
+ # Config files directory
+ ConfigDIRName = "Configs"
++
++
++# --- Selected core test plan file (override) ---
++CoreTestPlanFile = None  # if None -> default Configs/Test_Plan.txt
++
++
++def SetCoreTestPlanFile(path):
++    """Set custom test plan file path (may have any name)."""
++    global CoreTestPlanFile
++    if path is None:
++        CoreTestPlanFile = None
++        return
++    p = str(path).strip()
++    CoreTestPlanFile = os.path.abspath(p) if p else None
++
++
++def GetCoreTestPlanFile():
++    """Return actual plan file path used by core history reader."""
++    if CoreTestPlanFile:
++        return CoreTestPlanFile
++    return os.path.abspath(os.path.join(os.curdir, ConfigDIRName, TCoreHistory.history_fn))
++
++
++def ValidateCoreTestPlanFile(plan_path, algorithms):
++    """
++    Validate Test_Plan format. Raises CoreHistoryInvalid on mismatch.
++
++    Required fields: t, N(W), Algorithm, FAs
++    Additional checks:
++      - at least 2 records
++      - first power must be ~0
++      - time must be non-decreasing
++      - (Algorithm, FAs) must exist in algorithms dict keys
++    """
++    required = {"t", "N(W)", "Algorithm", "FAs"}
++
++    if not plan_path or not os.path.isfile(plan_path):
++        raise CoreHistoryInvalid(f"file not found: {plan_path}")
++
++    try:
++        rdr = DataReader.TDataReader(plan_path)
++    except Exception as exc:
++        raise CoreHistoryInvalid(f"cannot read file: {plan_path}. {exc}")
++
++    if not rdr.fields or not required.issubset(set(rdr.fields)):
++        raise CoreHistoryInvalid(
++            "unexpected header. Required fields: " + ", ".join(sorted(required))
++        )
++
++    t_i = rdr.find_field_index("t")
++    p_i = rdr.find_field_index("N(W)")
++    a_i = rdr.find_field_index("Algorithm")
++    f_i = rdr.find_field_index("FAs")
++
++    if len(rdr.raw_data) < 2:
++        raise CoreHistoryInvalid("too few data records (need at least 2)")
++
++    # first power must be zero
++    try:
++        p0 = float(rdr.raw_data[0][p_i])
++    except Exception:
++        raise CoreHistoryInvalid("N(W) must be numeric")
++    if p0 > 1e-15:
++        raise CoreHistoryInvalid("first record must have zero power")
++
++    # time monotonic + (Algorithm, FAs) exists
++    try:
++        prev_t = float(rdr.raw_data[0][t_i])
++    except Exception:
++        raise CoreHistoryInvalid("t must be numeric")
++
++    for line_no, rec in enumerate(rdr.raw_data[1:], start=2):
++        try:
++            t = float(rec[t_i])
++        except Exception:
++            raise CoreHistoryInvalid(f"t is not numeric (line {line_no})")
++
++        if t < prev_t:
++            raise CoreHistoryInvalid(f"time must be non-decreasing (line {line_no})")
++        prev_t = t
++
++        alg_name = rec[a_i]
++        try:
++            n_fas = int(float(rec[f_i]))
++        except Exception:
++            raise CoreHistoryInvalid(f"FAs is not integer-like (line {line_no})")
++
++        key = (alg_name, n_fas)
++        if key not in algorithms:
++            raise CoreHistoryInvalid(f"unknown Algorithm/FAs at line {line_no}: {alg_name} / {n_fas}")
+@@ -735,8 +825,8 @@
+ 
+         # Read the core test planned schedule
+-        fn = os.path.join(os.curdir, ConfigDIRName, type(self).history_fn)
+-        self.HistoryReader = DataReader.TDataReader(fn)
++        fn = GetCoreTestPlanFile()
++        self.HistoryReader = DataReader.TDataReader(fn)
+         m_print.m_print("Core test plan read successfully")
+         m_print.m_print("Fields: ")
+         m_print.m_print(self.HistoryReader.fields)
+@@ -1374,10 +1464,30 @@
+ 
+ def InitStaticArray():
+-    global Algorithms, Greens
+-    Algorithms = ReadStaticData(FINsListFile)
+-    Greens = FA_Gamma.readGreenFuncs()
++    global Algorithms, Greens
++    Algorithms = ReadStaticData(FINsListFile)
++    Greens = FA_Gamma.readGreenFuncs()
++
++def InitStaticArray(plan_file=None, validate_plan: bool = True):
++    """
++    Инициализирует статические входные данные проекта.
++
++    plan_file:
++        путь к выбранному пользователем файлу Test_Plan (может называться иначе).
++        если None — используется Configs/Test_Plan.txt (как раньше).
++
++    validate_plan:
++        если True — проверяет формат Test_Plan и при ошибке возбуждает CoreHistoryInvalid.
++    """
++    global Algorithms, Greens
++    if plan_file is not None:
++        SetCoreTestPlanFile(plan_file)
++    Algorithms = ReadStaticData(FINsListFile)
++    Greens = FA_Gamma.readGreenFuncs()
++    if validate_plan:
++        ValidateCoreTestPlanFile(GetCoreTestPlanFile(), Algorithms)
++
++
++def ExportAZSetpointsByAlgorithm(scale: float, plan_file: str = None, out_path: str = None):
++    """
++    Формирует уставки АЗ в единицах тока (по каналам), для каждого Algorithm/FAs,
++    присутствующего в Test_Plan.
++
++    Логика:
++      1) для каждого (Algorithm, FAs) находим максимальную плановую мощность Pmax (Вт)
++      2) ограничивающая мощность P_lim = Pmax * scale
++      3) уставка по току для канала ch: I_set = P_lim * effectiveness(ch) для данного алгоритма
++
++    Возвращает словарь:
++      {
++        "out_path": <путь к файлу>,
++        "rows": [ {"Algorithm":..., "FAs":..., "Pmax_W":..., "Plim_W":..., "I_A":{ch:...}}, ... ]
++      }
++    """
++    global Algorithms
++    if Algorithms is None:
++        raise CoreProcException("Algorithms не инициализированы. Сначала вызовите InitStaticArray().")
++
++    if plan_file is not None:
++        SetCoreTestPlanFile(plan_file)
++
++    fn = GetCoreTestPlanFile()
++    rdr = DataReader.TDataReader(fn)
++
++    # required fields
++    TimeField = "t"
++    PowerField = "N(W)"
++    AlgField = "Algorithm"
++    FAsField = "FAs"
++    t_i = rdr.find_field_index(TimeField)
++    p_i = rdr.find_field_index(PowerField)
++    a_i = rdr.find_field_index(AlgField)
++    f_i = rdr.find_field_index(FAsField)
++
++    # max power by algorithm
++    pmax = {}  # (alg_name, n_fas) -> max power (W)
++    for rec in rdr.raw_data:
++        alg_name = rec[a_i]
++        n_fas = int(float(rec[f_i]))
++        key = (alg_name, n_fas)
++        p = float(rec[p_i])
++        if key not in pmax or p > pmax[key]:
++            pmax[key] = p
++
++    rows = []
++    for (alg_name, n_fas), pmax_w in sorted(pmax.items()):
++        key = (alg_name, n_fas)
++        if key not in Algorithms:
++            raise CoreHistoryInvalid(f"Algorithm/FAs not found in MCUFINs: {alg_name} / {n_fas}")
++
++        alg = Algorithms[key]
++        plim = pmax_w * float(scale)
++
++        I_by_ch = {}
++        for ch in sorted(alg.detectors.keys()):
++            det = alg.detectors[ch]
++            if det.effectiveness is None:
++                raise CoreHistoryInvalid(f"No effectiveness for channel {ch} in algorithm {alg_name}/{n_fas}")
++            I_by_ch[ch] = float(det.effectiveness) * plim
++
++        rows.append({
++            "Algorithm": alg_name,
++            "FAs": n_fas,
++            "Pmax_W": pmax_w,
++            "Plim_W": plim,
++            "I_A": I_by_ch,
++        })
++
++    if out_path is None:
++        out_fn = "AZ_setpoints_by_algorithm.txt"
++        out_path = os.path.abspath(os.path.join(os.curdir, ResultsDIRName, out_fn))
++    else:
++        out_path = os.path.abspath(out_path)
++
++    os.makedirs(os.path.dirname(out_path), exist_ok=True)
++
++    # build header and write
++    all_channels = sorted({ch for r in rows for ch in r["I_A"].keys()})
++    hdr = ["Algorithm", "FAs", "Pmax_W", "Plim_W"] + [f"I_ch{ch}_A" for ch in all_channels] + [f"I_ch{ch}_nA" for ch in all_channels]
++    with open(out_path, "wt", encoding="utf8") as f:
++        f.write("\t".join(hdr) + "\n")
++        for r in rows:
++            base = [r["Algorithm"], str(r["FAs"]), f"{r['Pmax_W']:.6g}", f"{r['Plim_W']:.6g}"]
++            I_A = [r["I_A"].get(ch, 0.0) for ch in all_channels]
++            I_nA = [val * 1e9 for val in I_A]
++            line = base + [f"{val:.6g}" for val in I_A] + [f"{val:.6g}" for val in I_nA]
++            f.write("\t".join(line) + "\n")
++
++    return {"out_path": out_path, "rows": rows, "scale": float(scale), "plan_file": fn}
+ 
+ def ProcessCell(cell, hours):
+     global Algorithms, Greens
+     CoreHistory = TCoreHistory(Algorithms, Greens)
+diff --git a/tvs_gui.py b/tvs_gui.py
+--- a/tvs_gui.py
++++ b/tvs_gui.py
+@@ -27,6 +27,8 @@
+         self.base_dir = os.path.dirname(os.path.abspath(__file__))
+         self.results_dir = os.path.join(self.base_dir, "Core_FAs")
+ 
++        self.test_plan_file = tk.StringVar(value=os.path.join(self.base_dir, "Configs", "Test_Plan.txt"))
++
+         # имя выбранного файла (только basename, например "1-1.txt")
+         self.selected_result_name = tk.StringVar(value="")
+ 
+@@ -63,6 +65,9 @@
+         top.pack(fill="x")
+ 
+         ttk.Button(top, text="1) Инициализировать статику", command=self.on_init_static).pack(side="left")
++        ttk.Label(top, text="   Файл Test_Plan:").pack(side="left", padx=(15, 3))
++        ttk.Entry(top, width=45, textvariable=self.test_plan_file).pack(side="left")
++        ttk.Button(top, text="Выбрать…", command=self.on_choose_test_plan).pack(side="left", padx=(5, 10))
+         ttk.Label(top, text="   Ячейка:").pack(side="left", padx=(15, 3))
+         ttk.Entry(top, width=10, textvariable=self.last_cell).pack(side="left")
+ 
+@@ -142,14 +147,35 @@
+         self.log.insert("end", s + "\n")
+         self.log.see("end")
+ 
++    def on_choose_test_plan(self):
++        initial = self.test_plan_file.get().strip()
++        if initial and os.path.isfile(initial):
++            init_dir = os.path.dirname(initial)
++        else:
++            init_dir = os.path.join(self.base_dir, "Configs")
++        fn = filedialog.askopenfilename(
++            title="Выберите файл Test_Plan (история/план)",
++            initialdir=init_dir,
++            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
++        )
++        if fn:
++            self.test_plan_file.set(fn)
++
+     def on_init_static(self):
+         def work():
+             try:
+-                Test_plan.InitStaticArray()
++                plan_fn = self.test_plan_file.get().strip() or None
++                # Новый интерфейс (если поддерживается)
++                try:
++                    Test_plan.InitStaticArray(plan_file=plan_fn, validate_plan=True)
++                except TypeError:
++                    # Старый интерфейс
++                    Test_plan.InitStaticArray()
++
+                 self.after(0, lambda: self.log_line("InitStaticArray: успешно"))
+-            except Exception as e:
++            except Exception as exc:
+                 msg = f"{type(exc).__name__}: {exc}"
+-                self.after(0, lambda m=msg: messagebox.showerror("Ошибка расчёта", m))
++                self.after(0, lambda m=msg: messagebox.showerror("Ошибка инициализации", m))
+ 
+         threading.Thread(target=work, daemon=True).start()
+ 
+@@ -256,6 +282,35 @@
+                 f"лимит: {res.limit:g}\n\n"
+                 f"Интерпретация: мощности в Test_Plan можно умножить на scale."
+             )
++
++            # Дополнительно: сформировать уставки АЗ по токам для каждого алгоритма
++            try:
++                plan_fn = self.test_plan_file.get().strip() or None
++                sp = Test_plan.ExportAZSetpointsByAlgorithm(res.scale, plan_file=plan_fn)
++                out_path = sp.get("out_path")
++                rows = sp.get("rows", [])
++
++                lines = []
++                lines.append("Уставки АЗ (по максимальной плановой мощности для каждого алгоритма):")
++                lines.append(f"Файл: {out_path}")
++                for r in rows:
++                    alg = r["Algorithm"]
++                    n_fas = r["FAs"]
++                    plim = r["Plim_W"]
++                    I_A = r["I_A"]
++                    # отображаем в нА для удобства (и оставляем А в файле)
++                    parts = [f"{alg} / {n_fas} ТВС: Pлим={plim:.6g} Вт"]
++                    for ch in sorted(I_A.keys()):
++                        parts.append(f"ch{ch}={I_A[ch]*1e9:.6g} нА")
++                    lines.append("   " + ", ".join(parts))
++
++                self.log_line(lines[0])
++                for ln in lines[1:]:
++                    self.log_line(ln)
++
++                messagebox.showinfo("Уставки АЗ (ток)", "\n".join(lines))
++            except Exception as exc:
++                self.log_line(f"Уставки АЗ не сформированы: {type(exc).__name__}: {exc}")
+         except Exception as e:
+             messagebox.showerror("Ошибка планирования", str(e))
+ 
