@@ -629,6 +629,36 @@ class TVSGUI(tk.Tk):
             except Exception as exc:
                 self.log_line(f"Ошибка при расчёте уставок АЗ: {type(exc).__name__}: {exc}")
 
+            # Дополнительно: оценка тока реактиметра (канал 4) по Test_Plan и проверка порога 0.5 нА
+            react = None
+            try:
+                plan_path2 = self.test_plan_path.get().strip() or None
+                if hasattr(Test_plan, "ExportReactimeterCurrents"):
+                    react = Test_plan.ExportReactimeterCurrents(
+                        res.scale,
+                        plan_file=plan_path2,
+                        Imin_required_nA=0.5,
+                        method="geo",
+                    )
+                    self.log_line(f"Реактиметр: профиль токов сохранён: {react['out_path']}")
+                    if react["min_lim_nA"] is not None:
+                        status = "OK" if react["ok"] else "НИЖЕ МИНИМУМА"
+                        self.log_line(
+                            f"Реактиметр: min(I_lim)={react['min_lim_nA']:.6g} нА, "
+                            f"порог={react['Imin_required_nA']:.6g} нА => {status}"
+                        )
+                        if react["min_where"] is not None:
+                            t, alg_name, n_fas, N, eff, Ilim = react["min_where"]
+                            self.log_line(
+                                f"  Минимум при t={t:g} ч, {alg_name}/{n_fas}, N={N:g} W, "
+                                f"Eff4={eff:.3e} A/W, I_lim={Ilim:.6g} нА"
+                            )
+                else:
+                    self.log_line("Реактиметр: ExportReactimeterCurrents() не найдена в Test_plan.py")
+            except Exception as exc:
+                self.log_line(f"Ошибка при оценке реактиметра: {type(exc).__name__}: {exc}")
+
+
             msg_lines = [
                 f"Допустимое масштабирование мощности: scale = {res.scale:g}",
                 f"Ограничение: {res.limited_by}",
@@ -644,6 +674,16 @@ class TVSGUI(tk.Tk):
                     "Уставки АЗ по алгоритмам записаны в файл:",
                     setp['out_path'],
                 ]
+            if react:
+                msg_lines += [
+                    "",
+                    "Проверка реактиметра (канал 4):",
+                    f"min(I_lim) = {react['min_lim_nA']:.6g} нА (порог {react['Imin_required_nA']:.6g} нА) => "
+                    + ("OK" if react["ok"] else "НИЖЕ МИНИМУМА"),
+                    "Файл токов реактиметра:",
+                    react["out_path"],
+                ]
+
 
             messagebox.showinfo('Результат оценки', "\n".join(msg_lines))
         except Exception as exc:

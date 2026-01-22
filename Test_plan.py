@@ -1077,6 +1077,260 @@ def ReadStaticData(FINsListFile):
 
     return Algorithms
 
+
+# -------- Reactimeter (channel 4) support --------
+
+REACTIMETER_CHANNEL = 4
+SKNFP_CHANNELS = (1, 2, 3)
+
+def _geo_mean(vals):
+    """Geometric mean for positive values; fallback to arithmetic if invalid."""
+    vals = [float(v) for v in vals if v is not None]
+    if not vals:
+        return None
+    if any(v <= 0 for v in vals):
+        return sum(vals) / len(vals)
+    prod = 1.0
+    for v in vals:
+        prod *= v
+    return prod ** (1.0 / len(vals))
+
+def _arith_mean(vals):
+    vals = [float(v) for v in vals if v is not None]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+def _read_ref_reactimeter_eff() -> float | None:
+    """Read reference reactimeter effectiveness Eff(ch=4) from detectors_eff.txt."""
+    fn = os.path.join(os.curdir, ConfigDIRName, detectors_eff_fn)
+    rdr = DataReader.TDataReader(fn)
+    ch_i = rdr.find_field_index(RefDetChannelField)
+    eff_i = rdr.find_field_index(RefDetEffectivenessField)
+    for rec in rdr.raw_data:
+        try:
+            ch = int(float(rec[ch_i]))
+        except Exception:
+            continue
+        if ch == REACTIMETER_CHANNEL:
+            try:
+                return float(rec[eff_i])
+            except Exception:
+                return None
+    return None
+
+def ComputeReactimeterEffectivenesses(
+    algorithms: dict,
+    *,
+    method: str = "geo",
+    sknfp_channels: tuple[int, ...] = SKNFP_CHANNELS,
+    reactimeter_channel: int = REACTIMETER_CHANNEL,
+) -> float:
+    """
+    Заполняет для каждого алгоритма поле alg.reactimeter_eff (A/W),
+    оценивая изменение эффективности реактиметра по изменению Eff каналов 1..3.
+
+    Требуется: в detectors_eff.txt должен быть задан канал 4 (референсный).
+    Метод: method="geo" (геометрическое среднее) или "arith" (арифметическое).
+    """
+    # Find reference algorithm
+    ref_alg = None
+    for _, a in algorithms.items():
+        if getattr(a, "isReference", False):
+            ref_alg = a
+            break
+    if ref_alg is None:
+        raise RuntimeError("Reference algorithm not found (Reference=1 in MCUFINs.txt).")
+
+    eff_ref_react = _read_ref_reactimeter_eff()
+    if eff_ref_react is None:
+        raise RuntimeError(
+            f"Reactimeter channel {reactimeter_channel} not found in {detectors_eff_fn}. "
+            f"Add it as reference effectiveness (A/W)."
+        )
+
+    mean_fn = _geo_mean if method.lower() == "geo" else _arith_mean
+
+    # Reference: direct
+    setattr(ref_alg, "reactimeter_eff", float(eff_ref_react))
+    setattr(ref_alg, "reactimeter_k", 1.0)
+    setattr(ref_alg, "reactimeter_method", method.lower())
+
+    # Others: scale by mean ratio of SKNFP channels
+    for _, alg in algorithms.items():
+        if alg is ref_alg or getattr(alg, "isReference", False):
+            continue
+
+        ratios = []
+        used_channels = []
+        for ch in sknfp_channels:
+            if ch not in alg.detectors or ch not in ref_alg.detectors:
+                continue
+            e_alg = alg.detectors[ch].effectiveness
+            e_ref = ref_alg.detectors[ch].effectiveness
+            if e_alg is None or e_ref is None:
+                continue
+            try:
+                r = float(e_alg) / float(e_ref)
+            except Exception:
+                continue
+            ratios.append(r)
+            used_channels.append(ch)
+
+        k = mean_fn(ratios)
+        if k is None:
+            setattr(alg, "reactimeter_eff", None)
+            setattr(alg, "reactimeter_k", None)
+            setattr(alg, "reactimeter_method", method.lower())
+            setattr(alg, "reactimeter_used_channels", tuple(used_channels))
+            continue
+
+        setattr(alg, "reactimeter_eff", float(eff_ref_react) * float(k))
+        setattr(alg, "reactimeter_k", float(k))
+        setattr(alg, "reactimeter_method", method.lower())
+        setattr(alg, "reactimeter_used_channels", tuple(used_channels))
+
+    return float(eff_ref_react)
+
+
+def ExportReactimeterCurrents(
+    scale: float,
+    plan_file: str | None = None,
+    out_path: str | None = None,
+    *,
+    Imin_required_nA: float = 0.5,
+    validate_plan: bool = True,
+    method: str = "geo",
+):
+    """
+    По Test_Plan рассчитывает ток реактиметра (канал 4) в нА:
+      - I_react(t) = N(t) * Eff_react(alg) * 1e9
+      - I_react_lim(t) = scale * N(t) * Eff_react(alg) * 1e9
+
+    Также проверяет условие измеряемости: I_react_lim(t) >= Imin_required_nA для участков N(t)>0.
+
+    Пишет файл:
+      Core_FAs/reactimeter_currents.txt
+
+    Возвращает dict с минимумом/максимумом и местом минимума.
+    """
+    global Algorithms
+    if Algorithms is None:
+        raise RuntimeError("Static data not initialized. Call InitStaticArray() first.")
+
+    # Ensure reactimeter effectiveness exists
+    ComputeReactimeterEffectivenesses(Algorithms, method=method)
+
+    if plan_file is not None:
+        SetCoreTestPlanFile(plan_file)
+
+    plan_path = GetCoreTestPlanFile()
+    if validate_plan:
+        ValidateCoreTestPlanFile(plan_path, Algorithms)
+
+    rdr = DataReader.TDataReader(plan_path)
+    t_i = rdr.find_field_index("t")
+    p_i = rdr.find_field_index("N(W)")
+    a_i = rdr.find_field_index("Algorithm")
+    f_i = rdr.find_field_index("FAs")
+
+    out_dir = os.path.join(os.curdir, ResultsDIRName)
+    os.makedirs(out_dir, exist_ok=True)
+    if out_path is None:
+        out_path = os.path.join(out_dir, "reactimeter_currents.txt")
+
+    # Stats
+    min_lim = None
+    min_lim_where = None  # (t, alg, fas, N, Eff, I_lim_nA)
+    max_lim = None
+
+    per_alg = {}  # (alg,fas) -> {"min":..., "max":...}
+
+    rows_written = 0
+
+    with open(out_path, "wt", encoding="utf-8") as f:
+        f.write("# t_h\tAlgorithm\tFAs\tN_W\tNlim_W\tEffReact_A_per_W\tIreact_nA\tIreact_lim_nA\tOK_ge_%.6g_nA\n" % Imin_required_nA)
+
+        for rec in rdr.raw_data:
+            try:
+                t = float(rec[t_i])
+                N = float(rec[p_i])
+            except Exception:
+                continue
+
+            alg_name = str(rec[a_i])
+            try:
+                n_fas = int(float(rec[f_i]))
+            except Exception:
+                continue
+
+            key = (alg_name, n_fas)
+            if key not in Algorithms:
+                raise CoreHistoryInvalid(f"unknown Algorithm/FAs in plan: {alg_name} / {n_fas}")
+
+            alg = Algorithms[key]
+            eff = getattr(alg, "reactimeter_eff", None)
+            if eff is None:
+                raise RuntimeError(
+                    f"Reactimeter effectiveness is not available for algorithm {alg_name}/{n_fas}. "
+                    f"Check that channels 1-3 have effectiveness and detectors_eff.txt has channel 4."
+                )
+
+            Nlim = float(scale) * N
+            I = N * float(eff) * 1e9
+            Ilim = Nlim * float(eff) * 1e9
+            ok = (N <= 0.0) or (Ilim >= float(Imin_required_nA))
+
+            f.write(f"{t:.6f}\t{alg_name}\t{n_fas:d}\t{N:.6e}\t{Nlim:.6e}\t{float(eff):.6e}\t{I:.6e}\t{Ilim:.6e}\t{1 if ok else 0}\n")
+            rows_written += 1
+
+            # Update per-alg stats only for N>0 segments
+            if N > 0.0:
+                st = per_alg.get(key)
+                if st is None:
+                    per_alg[key] = {"min": Ilim, "max": Ilim}
+                else:
+                    st["min"] = min(st["min"], Ilim)
+                    st["max"] = max(st["max"], Ilim)
+
+                if min_lim is None or Ilim < min_lim:
+                    min_lim = Ilim
+                    min_lim_where = (t, alg_name, n_fas, N, float(eff), Ilim)
+                if max_lim is None or Ilim > max_lim:
+                    max_lim = Ilim
+
+        # Summary block
+        f.write("\n")
+        f.write("# SUMMARY\n")
+        f.write(f"# scale = {float(scale):.6g}\n")
+        f.write(f"# Imin_required_nA = {float(Imin_required_nA):.6g}\n")
+        if min_lim_where is not None:
+            t, alg_name, n_fas, N, eff, Ilim = min_lim_where
+            f.write(f"# MIN_Ireact_lim_nA = {Ilim:.6e} at t={t:.6f}h alg={alg_name} FAs={n_fas} N={N:.6e}W Eff={eff:.6e}A/W\n")
+        if max_lim is not None:
+            f.write(f"# MAX_Ireact_lim_nA = {max_lim:.6e}\n")
+        f.write("# Per-algorithm minima/maxima (only where N>0):\n")
+        for key in sorted(per_alg.keys(), key=lambda k: (k[0], k[1])):
+            st = per_alg[key]
+            f.write(f"#   {key[0]}\t{key[1]}\tmin={st['min']:.6e}\tmax={st['max']:.6e}\n")
+
+    ok_all = True
+    if min_lim is not None and min_lim < float(Imin_required_nA):
+        ok_all = False
+
+    return {
+        "out_path": os.path.abspath(out_path),
+        "rows_written": rows_written,
+        "scale": float(scale),
+        "Imin_required_nA": float(Imin_required_nA),
+        "min_lim_nA": (float(min_lim) if min_lim is not None else None),
+        "max_lim_nA": (float(max_lim) if max_lim is not None else None),
+        "min_where": min_lim_where,  # (t, alg, fas, N, Eff, Ilim_nA)
+        "ok": ok_all,
+        "per_algorithm": per_alg,
+    }
+
+
 def InitStaticArray(build_core_history: bool = True, plan_file: str | None = None, validate_plan: bool = True):
     """
     Инициализирует статические входные данные проекта.
@@ -1100,6 +1354,13 @@ def InitStaticArray(build_core_history: bool = True, plan_file: str | None = Non
 
     # 2) Читаем статику (алгоритмы + функции Грина)
     Algorithms = ReadStaticData(FINsListFile)
+    # 2.1) Подготовка эффективности реактиметра (канал 4) по изменению каналов 1..3
+    try:
+        ComputeReactimeterEffectivenesses(Algorithms, method="geo")
+    except Exception as exc:
+        # Не валим инициализацию, но оставляем понятную диагностику в консоли/логе
+        m_print.m_print(f"Reactimeter effectiveness was not prepared: {type(exc).__name__}: {exc}")
+
     Greens = FA_Gamma.readGreenFuncs()
 
     # 3) Проверяем формат Test_Plan (опционально)
