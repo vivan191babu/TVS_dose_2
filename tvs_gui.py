@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 import Test_plan
+import core_fas_8
 import Chart
 
 # Планирование и заглушка ТУК — опциональны (если модулей нет, GUI всё равно работает)
@@ -93,6 +94,9 @@ class TVSGUI(tk.Tk):
 
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.results_dir = os.path.join(self.base_dir, "Core_FAs")
+        self.core_map_csv_path = tk.StringVar(
+            value=os.path.join(self.base_dir, "241_UM_2025.csv")
+        )
         # ---- Test_Plan file (selected before init) ----
         default_plan = os.path.join(self.base_dir, "Configs", "Test_Plan.txt")
         self.test_plan_path = tk.StringVar(value=default_plan if os.path.isfile(default_plan) else "")
@@ -123,12 +127,16 @@ class TVSGUI(tk.Tk):
 
         self.tab_calc = ttk.Frame(self.nb)
         self.tab_plot = ttk.Frame(self.nb)
+        self.tab_map = ttk.Frame(self.nb)
 
         self.nb.add(self.tab_calc, text="Расчёт")
         self.nb.add(self.tab_plot, text="Графики")
+        self.nb.add(self.tab_map, text="Картограмма")
 
         self._build_calc_tab()
         self._build_plot_tab()
+        self._build_map_tab()
+
 
         # первичное заполнение списка файлов
         self.refresh_result_file_list()
@@ -243,13 +251,79 @@ class TVSGUI(tk.Tk):
         self.chart_time = Chart.ChartMainWindow(self.tab_time)
         self.chart_prof = Chart.ChartMainWindow(self.tab_prof)
 
+    def _build_map_tab(self):
+        top = ttk.Frame(self.tab_map, padding=10)
+        top.pack(fill="x")
+
+        ttk.Label(top, text="CSV картограммы:").pack(side="left")
+        ttk.Entry(top, textvariable=self.core_map_csv_path, width=70).pack(side="left", padx=(8, 8))
+
+        def browse():
+            fn = filedialog.askopenfilename(
+                title="Выбор CSV картограммы",
+                filetypes=[("CSV файлы", "*.csv"), ("Все файлы", "*.*")]
+            )
+            if fn:
+                self.core_map_csv_path.set(fn)
+                # можно сразу перезагрузить картограмму
+                try:
+                    self.coremap_gui.load_from_csv_path(fn)
+                except Exception as exc:
+                    messagebox.showerror("Ошибка", f"Не удалось загрузить CSV картограммы:\n{exc}")
+
+        ttk.Button(top, text="Выбрать...", command=browse).pack(side="left")
+
+        # Встроенная картограмма (как виджет внутри вкладки)
+        self.coremap_gui = core_fas_8.CoreMapGUI(
+            self.tab_map,
+            embedded=True,
+            integrated_mode=True,
+            on_calc_request=self._map_calc_request
+        )
+
+    def _map_calc_request(self, cell: str, time_h: float):
+        # запуск штатного расчёта, как если бы пользователь ввёл cell/time и нажал "Рассчитать"
+        self.last_cell.set(cell)
+        self.last_time.set(str(time_h))
+        self.on_calc()
+
+    def _read_fa_integrals_file(self, path: str) -> dict:
+        """
+        Ожидается 3 колонки:
+        cell  W_all  W_2h
+        Разделители: пробел/таб/;.
+        Возвращает dict[cell -> W_all].
+        """
+        import re
+        d = {}
+        if not path or (not os.path.exists(path)):
+            return d
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if not s:
+                    continue
+                # пропускаем заголовки
+                low = s.lower()
+                if low.startswith("cell") or low.startswith("ячейка"):
+                    continue
+                parts = re.split(r"[;\t ]+", s)
+                if len(parts) < 2:
+                    continue
+                cell = parts[0].strip()
+                try:
+                    w_all = float(parts[1].replace(",", "."))
+                except Exception:
+                    continue
+                d[cell] = w_all
+        return d
+
     def _show_integrals_after_init(self, info):
-        # Поддержка dict и tuple на случай несовпадения версий
+        # ?????????????????? dict ?? tuple ???? ???????????? ???????????????????????? ????????????
         if isinstance(info, dict):
             print("DEBUG type(info) =", type(info))
             print("DEBUG info =", info)
             out_path = info["out_path"]
-
             cell_all = info["cell_all"]
             w_all = info["w_all"]
             w_2h_for_cell_all = info.get("w_2h_for_cell_all")
@@ -263,6 +337,23 @@ class TVSGUI(tk.Tk):
             w_2h_for_cell_all = None
             w_all_for_cell_2h = None
 
+        # --- ???????????????????? ?????????????????????? ???????????????????????????????? ---
+        try:
+            csv_map = self.core_map_csv_path.get().strip()
+            if csv_map and os.path.exists(csv_map):
+                # ???????? ?????? ???? ?????????????????? ??? ????????????????
+                if not getattr(self, "coremap_gui", None):
+                    return
+                if not self.coremap_gui.cells:
+                    self.coremap_gui.load_from_csv_path(csv_map)
+
+                energy = self._read_fa_integrals_file(out_path)
+                self.coremap_gui.set_energy_integrals(energy)
+            else:
+                self.log_line(f"CSV ?????????????????????? ???? ????????????: {csv_map}")
+        except Exception as exc:
+            self.log_line(f"??????????????????????: ???????????? ????????????????????: {type(exc).__name__}: {exc}")
+
         self._after_init_static(
             out_path,
             cell_all,
@@ -272,7 +363,6 @@ class TVSGUI(tk.Tk):
             w_2h,
             w_all_for_cell_2h,
         )
-
 
     # ---------------- helpers ----------------
     def log_line(self, s: str):
