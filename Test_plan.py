@@ -4,6 +4,7 @@ import DataReader
 import FA_Gamma
 import m_print
 import datetime, re, os, math, subprocess, string
+from typing import Optional, Tuple
 
 TIME_FORMAT = '%d.%m.%Y %H:%M:%S'
 
@@ -78,7 +79,7 @@ ResultsDIRName = "Core_FAs"
 CoreTestPlanFile = None  # full path to test plan file, or None for default
 
 
-def SetCoreTestPlanFile(path: str | None):
+def SetCoreTestPlanFile(path: Optional[str]):
     """Override the core test plan file.
 
     Parameters
@@ -97,10 +98,10 @@ def SetCoreTestPlanFile(path: str | None):
 
 # --- Core test plan (Test_Plan) selection ---
 # If None => default Configs/Test_Plan.txt (backward compatible)
-CoreTestPlanFile: str | None = None
+CoreTestPlanFile: Optional[str] = None
 
 
-def SetCoreTestPlanFile(path: str | None):
+def SetCoreTestPlanFile(path: Optional[str]):
     """Set custom core test plan file path (may have any name)."""
     global CoreTestPlanFile
     if path is None:
@@ -1101,7 +1102,7 @@ def _arith_mean(vals):
         return None
     return sum(vals) / len(vals)
 
-def _read_ref_reactimeter_eff() -> float | None:
+def _read_ref_reactimeter_eff() -> Optional[float]:
     """Read reference reactimeter effectiveness Eff(ch=4) from detectors_eff.txt."""
     fn = os.path.join(os.curdir, ConfigDIRName, detectors_eff_fn)
     rdr = DataReader.TDataReader(fn)
@@ -1123,7 +1124,7 @@ def ComputeReactimeterEffectivenesses(
     algorithms: dict,
     *,
     method: str = "geo",
-    sknfp_channels: tuple[int, ...] = SKNFP_CHANNELS,
+    sknfp_channels: Tuple[int, ...] = SKNFP_CHANNELS,
     reactimeter_channel: int = REACTIMETER_CHANNEL,
 ) -> float:
     """
@@ -1195,8 +1196,8 @@ def ComputeReactimeterEffectivenesses(
 
 def ExportReactimeterCurrents(
     scale: float,
-    plan_file: str | None = None,
-    out_path: str | None = None,
+    plan_file: Optional[str] = None,
+    out_path: Optional[str] = None,
     *,
     Imin_required_nA: float = 0.5,
     validate_plan: bool = True,
@@ -1331,7 +1332,7 @@ def ExportReactimeterCurrents(
     }
 
 
-def InitStaticArray(build_core_history: bool = True, plan_file: str | None = None, validate_plan: bool = True):
+def InitStaticArray(build_core_history: bool = True, plan_file: Optional[str] = None, validate_plan: bool = True):
     """
     Инициализирует статические входные данные проекта.
 
@@ -1399,7 +1400,7 @@ def _cell_sort_key(cell: str):
         return (cell,)
 
 
-def ExportFAEnergyIntegrals(out_path: str | None = None):
+def ExportFAEnergyIntegrals(out_path: Optional[str] = None):
     """
     Формирует таблицу:
       cell   Integral_all_time(W*hr)   Integral_last_2h(W*hr)
@@ -1453,8 +1454,8 @@ def ExportFAEnergyIntegrals(out_path: str | None = None):
 
 def ExportAZSetpointsByAlgorithm(
     scale: float,
-    plan_file: str | None = None,
-    out_path: str | None = None,
+    plan_file: Optional[str] = None,
+    out_path: Optional[str] = None,
     *,
     validate_plan: bool = True,
 ):
@@ -1609,7 +1610,7 @@ _U235_MOLAR_MASS_G = 235.0  # g/mol (engineering accuracy is sufficient here)
 
 
 def ComputeCoreEnergyAndU235(
-    plan_file: str | None = None,
+    plan_file: Optional[str] = None,
     *,
     scale: float = 1.0,
     validate_plan: bool = True,
@@ -1729,7 +1730,7 @@ def _cell_sort_key_legacy(cell: str):
         return (cell,)
 
 
-def ExportFAEnergyIntegrals_tuple(out_path: str | None = None):
+def ExportFAEnergyIntegrals_tuple(out_path: Optional[str] = None):
     """
     LEGACY-ВАРИАНТ: оставлен для совместимости со старым форматом возврата.
 
