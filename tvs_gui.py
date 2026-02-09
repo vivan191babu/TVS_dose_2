@@ -13,6 +13,7 @@ import glob
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+from typing import Optional
 
 import Test_plan
 import core_fas_8
@@ -473,10 +474,10 @@ class TVSGUI(tk.Tk):
         out_path: str,
         cell_all: str,
         w_all: float,
-        w_2h_for_cell_all: float | None,
+        w_2h_for_cell_all: Optional[float],
         cell_2h: str,
         w_2h: float,
-        w_all_for_cell_2h: float | None,
+        w_all_for_cell_2h: Optional[float],
     ):
         self.log_line("InitStaticArray: успешно")
         s1 = f"Макс интеграл за всё время: {cell_all} = {w_all:g} W*hr"
